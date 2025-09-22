@@ -1,0 +1,48 @@
+POST http://127.0.0.1:8000/address/addresses/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "country_name": "Canada",
+  "province_name": "Ontario",
+  "city_name": "Toronto",
+  "street_number": "123",
+  "street_name": "Queen St W",
+  "unit_suite": "5B",
+  "postal_code": "M5V 2B7"
+}
+{
+  "id": 42,
+  "street_number": "123",
+  "street_name": "Queen St W",
+  "unit_suite": "5B",
+  "postal_code": "M5V 2B7",
+  "city": { "id": 7, "name": "Toronto" },
+  "province": { "id": 3, "name": "Ontario", "code": "ON" },
+  "country": { "id": 1, "name": "Canada", "code": "CA" },
+  "date_created": "2025-08-25T10:31:01.123Z",
+  "date_updated": "2025-08-25T10:31:01.123Z"
+}
+
+
+
+PATCH /address/addresses/42/
+Authorization: Bearer <access>
+Content-Type: application/json
+
+{ "street_name": "King St W" }
+PATCH /address/addresses/42/
+Authorization: Bearer <access>
+Content-Type: application/json
+
+{
+  "country_code": "CA",
+  "province_code": "QC",
+  "city_name": "Montréal",
+  "postal_code": "H3A 2A7"
+}
+
+
+DELETE /address/addresses/42/
+Authorization: Bearer <access>
+

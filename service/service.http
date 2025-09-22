@@ -1,0 +1,107 @@
+GET http://127.0.0.1:8000/service/categories/?search=plumb&ordering=-created_at
+
+[
+  {
+    "id": 3,
+    "title": "Plumbing",
+    "description": "Pipes, leaks, fixtures",
+    "photo": "/media/service_category/plumbing.png",
+    "photo_url": "http://127.0.0.1:8000/media/service_category/plumbing.png",
+    "services_count": 12,
+    "created_at": "2025-08-24T10:15:30.123Z"
+  }
+]
+
+GET http://127.0.0.1:8000/service/services/
+GET http://127.0.0.1:8000/service/services/?search=plumb&ordering=-avg_rating
+GET http://127.0.0.1:8000/service/services/?category=5&ordering=price
+GET http://127.0.0.1:8000/service/services/?unit=2
+
+[
+  {
+    "id": 12,
+    "title": "Plumbing - Pipe Fix",
+    "description": "Fix leaks and pipes.",
+    "is_trade_required": false,
+    "price": "79.99",
+    "unit": { "id": 2, "name": "Hour", "code": "HR" },
+    "categories": [{ "id": 3, "title": "Plumbing" }],
+    "photos": [
+      {
+        "id": 101,
+        "caption": "Before",
+        "uploaded_at": "2025-08-25T09:49:10.120Z",
+        "photo": "/media/service_photos/x.png",
+        "photo_url": "http://127.0.0.1:8000/media/service_photos/x.png"
+      }
+    ],
+    "types": [
+      {
+        "id": 7,
+        "title": "Emergency call",
+        "description": null,
+        "price": "120.00",
+        "created_at": "2025-08-20T10:00:00Z",
+        "photos": [
+          {
+            "id": 301,
+            "caption": "Example",
+            "uploaded_at": "2025-08-22T08:30:00Z",
+            "photo": "/media/service_type_photos/y.jpg",
+            "photo_url": "http://127.0.0.1:8000/media/service_type_photos/y.jpg"
+          }
+        ]
+      }
+    ],
+    "average_rating": 4.5,
+    "created_at": "2025-08-10T12:00:00Z"
+  }
+]
+
+
+GET http://127.0.0.1:8000/service/service-types/
+GET http://127.0.0.1:8000/service/service-types/?service=12
+GET http://127.0.0.1:8000/service/service-types/?search=emergency&ordering=-price
+[
+  {
+    "id": 5,
+    "title": "Emergency Call",
+    "description": null,
+    "price": "120.00",
+    "created_at": "2025-08-22T09:15:10Z",
+    "service": {
+      "id": 12,
+      "title": "Plumbing",
+      "price": "79.99",
+      "unit": { "id": 2, "name": "Hour", "code": "HR" }
+    }
+  }
+]
+
+
+POST /service/ratings/
+Authorization: Bearer <access>
+Content-Type: application/json
+
+{ "service": 12, "rating": 5, "review": "Excellent!" }
+
+
+PATCH /service/ratings/45/
+Authorization: Bearer <access>
+Content-Type: application/json
+
+{ "rating": 4, "review": "Good, but price high." }
+
+
+DELETE /service/ratings/45/
+Authorization: Bearer <access>
+
+
+GET /service/ratings/?search=pipe&ordering=-rating
+
+
+GET /service/ratings/mine/
+Authorization: Bearer <access>
+
+
+GET /service/services/12/ratings/?ordering=-created_at

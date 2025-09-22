@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>One-Time Passcode</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f9f9f9; font-family: Arial, sans-serif; }
+    .container { max-width: 400px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 32px 24px; text-align: center; }
+    .logo { margin-bottom: 24px; }
+    .otp-code { font-size: 2em; font-weight: bold; letter-spacing: 4px; margin: 16px 0; color: #2d7cf2; }
+    .expire { color: #888; margin-bottom: 24px; }
+    .problems { color: #444; margin-top: 24px; font-size: 0.95em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="https://via.placeholder.com/120x40?text=Logo" alt="Logo" height="40">
+    </div>
+    <div>
+      <div>Here is your one-time passcode:</div>
+      <div class="otp-code">{{ code }}</div>
+      <div class="expire">This code will expire in {{ ttl }} minutes.</div>
+      <div class="problems">Problems? Just reply to this email or contact {{ support_email }}.</div>
+    </div>
+  </div>
+</body>
+</html>

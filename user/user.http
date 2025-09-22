@@ -1,0 +1,117 @@
+POST /auth/register/
+Headers: Content-Type: application/json
+{ "email": "newuser@example.com", "password": "Str0ngPass!" }
+{ "detail": "Registration successful. OTP has been sent to your email." }
+{ "password": ["This password is too short."] }
+
+
+POST /auth/verify-email/
+Headers: Content-Type: application/json
+{ "email": "newuser@example.com", "code": "123456" }
+{ "detail": "Email verified successfully.", "email": "newuser@example.com", "is_verified": true }
+{ "detail": "Invalid or expired code." }
+
+
+POST /auth/resend-otp/
+Headers: Content-Type: application/json
+{ "email": "newuser@example.com" }
+{ "detail": "If an account exists, a new code was sent." }
+
+
+POST /auth/login/
+Headers: Content-Type: application/json
+{ "email": "newuser@example.com", "password": "Str0ngPass!" }
+{
+  "refresh": "<refresh_token>",
+  "access": "<access_token>",
+  "user": {
+    "email": "newuser@example.com",
+    "first_name": "",
+    "last_name": "",
+    "is_verified": true,
+    "is_provider": false,
+    "is_professional": false
+  }
+}
+{ "detail": "No active account found with the given credentials" }
+
+
+POST /auth/token/refresh/
+Headers: Content-Type: application/json
+{ "refresh": "<refresh_token>" }
+{ "access": "<new_access_token>" }
+{ "detail": "Token is invalid or expired", "code": "token_not_valid" }
+
+
+POST /auth/logout/
+Headers:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+{ "refresh": "<refresh_token>" }
+{ "detail": "Logged out successfully." }
+{ "detail": "Invalid refresh token." }
+
+
+POST /auth/password-reset/request/
+Headers: Content-Type: application/json
+{ "email": "newuser@example.com" }
+{ "detail": "If an account exists, a reset code was sent." }
+
+
+POST /auth/password-reset/confirm/
+Headers: Content-Type: application/json
+{
+  "email": "newuser@example.com",
+  "code": "123456",
+  "new_password": "EvenStrongerPass1!"
+}
+{ "detail": "Password has been reset successfully." }
+{ "detail": "Invalid or expired code." }
+{ "new_password": ["This password is too common."] }
+
+
+POST /auth/email-update/request/
+Headers:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+{ "new_email": "new.address@example.com" }
+{ "detail": "Verification code sent to new email." }
+{ "new_email": ["New email must be different from current email."] }
+{ "new_email": ["This email is already in use."] }
+
+
+POST /auth/email-update/confirm/
+Headers:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+{ "detail": "Email updated successfully.", "email": "new.address@example.com" }
+{ "detail": "Invalid or expired code." }
+{ "detail": "Email already in use. Please request a new code." }
+
+POST http://127.0.0.1:8000/auth/profile/image/
+Headers: Authorization: Bearer <access_token>
+Body: form-data
+Key: profile_image (Type: File), choose an image file
+{ "detail": "Profile image updated.", "profile_image": "http://127.0.0.1:8000/media/provider_profiles/abc123.png" }
+
+
+
+PATCH http://127.0.0.1:8000/auth/profile/basic/
+Headers:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+{
+  "first_name": "Amin",
+  "last_name": "Nasiri",
+  "phone_number": "+359888123456"
+}
+
+{
+  "detail": "Profile updated.",
+  "user": {
+    "email": "you@example.com",
+    "first_name": "Amin",
+    "last_name": "Nasiri",
+    "phone_number": "+359888123456"
+  }
+}
