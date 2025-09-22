@@ -2,35 +2,17 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, Avg
 from django.db.models.functions import Lower
 from django.utils import timezone
 from service.models import Service
-from django.db import transaction
 
-phone_validator = RegexValidator(r'^\+?\d{7,15}$', 'Enter a valid phone number (7-15 digits, optional leading "+").')
-sin_digits_validator = RegexValidator(r'^\d{9}$', 'SIN must be exactly 9 digits.')
-institution_number_validator = RegexValidator(r'^\d{3}$', 'Institution number must be 3 digits.')
-transit_number_validator = RegexValidator(r'^\d{5}$', 'Transit number must be 5 digits.')
-account_number_validator = RegexValidator(r'^\d{5,12}$', 'Account number must be 5–12 digits.')
-
-def _luhn_valid(num: str) -> bool:
-    total = 0
-    alt = False
-    for d in reversed(num):
-        n = ord(d) - 48
-        if alt:
-            n *= 2
-            if n > 9:
-                n -= 9
-        total += n
-        alt = not alt
-    return total % 10 == 0
+phone_validator = RegexValidator(r'^\+?\d{7,15}$', 'Enter a valid phone number (7–15 digits, optional leading "+").')
 
 class Professional(models.Model):
     class VerificationStatus(models.TextChoices):
-        PENDING  = 'pending', 'Pending'
+        PENDING = 'pending', 'Pending'
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
 
@@ -39,21 +21,24 @@ class Professional(models.Model):
         DRIVER_LICENSE = 'driver_license', 'Driver License'
         PR = 'pr', 'Permanent Resident Card'
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='professional_profile')
-    sin = models.CharField(max_length=9, validators=[sin_digits_validator], null=True, blank=True, unique=True)
-
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='professional_profile'
+    )
     license_number = models.CharField(max_length=255)
-    government_issued_id = models.CharField(max_length=20, choices=IssuedId.choices, default=IssuedId.DRIVER_LICENSE)
+    government_issued_id = models.CharField(
+        max_length=20,
+        choices=IssuedId.choices,
+        default=IssuedId.DRIVER_LICENSE
+    )
     certification = models.FileField(upload_to='professional_certification/', blank=True, null=True)
-
-    institution_name = models.CharField(max_length=255, blank=True, null=True)
-    institution_number = models.CharField(max_length=3, blank=True, null=True, validators=[institution_number_validator])
-    transit_number = models.CharField(max_length=5, blank=True, null=True, validators=[transit_number_validator])
-    account_number = models.CharField(max_length=12, blank=True, null=True, validators=[account_number_validator])
-    account_holder_name = models.CharField(max_length=100, blank=True, null=True)
-
     is_verified = models.BooleanField(default=False)
-    verification_status = models.CharField(max_length=20, choices=VerificationStatus.choices, default=VerificationStatus.PENDING)
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING
+    )
 
     class Meta:
         ordering = ['user__email']
@@ -81,23 +66,15 @@ class Professional(models.Model):
         avg_rating = self.ratings.aggregate(avg=Avg('rating'))['avg']
         return round(avg_rating, 2) if avg_rating is not None else None
 
-    def clean(self):
-        super().clean()
-        if self.sin and not _luhn_valid(self.sin):
-            raise ValidationError({'sin': 'Invalid SIN (failed checksum).'})
-        trio = [self.institution_number, self.transit_number, self.account_number]
-        if any(trio) and not all(trio):
-            raise ValidationError('Provide institution number, transit number, and account number together.')
-
     def save(self, *args, **kwargs):
-        self.full_clean()
         with transaction.atomic():
             res = super().save(*args, **kwargs)
             user = self.user
-            if not user.is_professional or user.is_provider:
-                user.is_professional = True
-                user.is_provider = False
-                user.save(update_fields=['is_professional', 'is_provider'])
+            if hasattr(user, 'is_professional') and hasattr(user, 'is_provider'):
+                if not user.is_professional or user.is_provider:
+                    user.is_professional = True
+                    user.is_provider = False
+                    user.save(update_fields=['is_professional', 'is_provider'])
             return res
 
     def delete(self, *args, **kwargs):
@@ -106,10 +83,11 @@ class Professional(models.Model):
         with transaction.atomic():
             user = self.user
             res = super().delete(*args, **kwargs)
-            if user.is_professional or not user.is_provider:
-                user.is_professional = False
-                user.is_provider = True
-                user.save(update_fields=['is_professional', 'is_provider'])
+            if hasattr(user, 'is_professional') and hasattr(user, 'is_provider'):
+                if user.is_professional or not user.is_provider:
+                    user.is_professional = False
+                    user.is_provider = True
+                    user.save(update_fields=['is_professional', 'is_provider'])
         if storage and name:
             storage.delete(name)
         return res
@@ -270,3 +248,20 @@ class ProfessionalRating(models.Model):
         super().clean()
         if not (1 <= self.rating <= 5):
             raise ValidationError("Rating must be between 1 and 5.")
+
+class ProfessionalPayout(models.Model):
+    professional = models.OneToOneField(
+        Professional,
+        on_delete=models.CASCADE,
+        related_name="payout"
+    )
+    stripe_account_id = models.CharField(max_length=64, blank=True, null=True)
+    payouts_enabled = models.BooleanField(default=False)
+    onboarding_complete = models.BooleanField(default=False)
+    last_payout_status = models.CharField(max_length=32, blank=True, null=True)
+    last_payout_date = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Payout info for {self.professional.user.email}"

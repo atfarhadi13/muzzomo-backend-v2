@@ -1,0 +1,224 @@
+POST http://localhost:8000/professional/api/professionals/
+
+Authorization: Bearer <your-JWT-access-token>
+Content-Type: multipart/form-data
+
+{
+  "license_number": "LIC-12345",
+  "government_issued_id": "driver_license"
+}
+
+GET /api/professionals/me
+Authorization: Bearer <token>
+
+PATCH /api/professionals/12/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "license_number": "LIC-99999" }
+
+
+DELETE /api/professionals/12/
+Authorization: Bearer <token>
+
+POST http://localhost:8000/professional/api/professional-services/
+
+{ 
+    "service": 1 
+}
+
+GET /api/professional-services/
+
+GET /api/professional-services/{id}/
+
+PATCH /api/professional-services/{id}/
+{ 
+    "service": 1 
+}
+
+DELETE /api/professional-services/{id}/
+
+
+POST http://localhost:8000/api/professional-insurance/
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+insurance_provider_name = "ABC Insurance"
+insurance_policy_number = "POL-123456"
+insurance_expiry_date = 2030-12-31
+insurance_file = <file>
+
+GET http://localhost:8000/api/professional-insurance/me
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-insurance/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-insurance/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-insurance/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "insurance_provider_name": "XYZ Insurance"
+}
+
+DELETE http://localhost:8000/api/professional-insurance/{id}/
+Authorization: Bearer <token>
+
+
+# Professional Trade
+POST http://localhost:8000/api/professional-trades/
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+trade_license_number = TL-2025-0001
+trade_license_expiry_date = 2030-12-31
+trade_license_file = <file>
+
+GET http://localhost:8000/api/professional-trades/mine
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-trades/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-trades/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-trades/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "trade_license_number": "TL-2025-0099"
+}
+
+DELETE http://localhost:8000/api/professional-trades/{id}/
+Authorization: Bearer <token>
+
+# Professional Inventory
+POST http://localhost:8000/api/professional-inventories/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "item_name": "Hammer",
+  "description": "A sturdy hammer",
+  "quantity": 10.00,
+  "unit": "pieces"
+}
+
+GET http://localhost:8000/api/professional-inventories/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-inventories/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-inventories/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "quantity": 15.00
+}
+
+DELETE http://localhost:8000/api/professional-inventories/{id}/
+Authorization: Bearer <token>
+
+DELETE http://localhost:8000/api/professional-inventories/{id}/
+Authorization: Bearer <token>
+
+# Professional Task
+POST http://localhost:8000/api/professional-tasks/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "worker_name": "John Doe",
+  "worker_phone": "+1234567890",
+  "worker_email": "john@example.com",
+  "start_date": "2023-12-01",
+  "start_time": "09:00:00",
+  "end_time": "17:00:00",
+  "price_per_hour": 25.00,
+  "description": "Painting job",
+  "status": "pending"
+}
+
+GET http://localhost:8000/api/professional-tasks/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-tasks/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-tasks/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+
+DELETE http://localhost:8000/api/professional-tasks/{id}/
+Authorization: Bearer <token>
+
+# Professional Rating
+POST http://localhost:8000/api/professional-ratings/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "user": 1,
+  "rating": 5,
+  "review": "Excellent service!"
+}
+
+GET http://localhost:8000/api/professional-ratings/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-ratings/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-ratings/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "rating": 4
+}
+
+DELETE http://localhost:8000/api/professional-ratings/{id}/
+Authorization: Bearer <token>
+
+# Professional Payout
+POST http://localhost:8000/api/professional-payouts/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "stripe_account_id": "acct_1234567890",
+  "payouts_enabled": true,
+  "onboarding_complete": false,
+  "last_payout_status": "pending"
+}
+
+GET http://localhost:8000/api/professional-payouts/
+Authorization: Bearer <token>
+
+GET http://localhost:8000/api/professional-payouts/{id}/
+Authorization: Bearer <token>
+
+PATCH http://localhost:8000/api/professional-payouts/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "payouts_enabled": false
+}
+
+DELETE http://localhost:8000/api/professional-payouts/{id}/
+Authorization: Bearer <token>
+
+

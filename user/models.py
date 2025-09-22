@@ -16,8 +16,6 @@ phone_validator = RegexValidator(
     message='Enter a valid phone number (7-15 digits, optional leading "+").',
 )
 
-# -------------------- User --------------------
-
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -74,7 +72,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
-# -------------------- One-time codes --------------------
 
 class OneTimeCodeQuerySet(models.QuerySet):
     def active(self):
