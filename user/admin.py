@@ -8,7 +8,7 @@ from .models import CustomUser, OneTimeCode
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
-    list_display = ('email', 'first_name', 'last_name', 'is_provider', 'is_professional', 'is_verified', 'is_active', 'date_joined')
+    list_display = ('email', 'first_name', 'last_name', 'phone_number', 'is_provider', 'is_professional', 'is_verified', 'is_active', 'date_joined')
     list_filter = ('is_active', 'is_staff', 'is_superuser', 'is_provider', 'is_professional', 'is_verified', 'date_joined')
     search_fields = ('email', 'first_name', 'last_name', 'phone_number')
     ordering = ('email',)
@@ -28,7 +28,7 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
     
-    readonly_fields = ('date_joined', 'last_login')
+    readonly_fields = ('date_joined', 'last_login', 'password')
 
 
 @admin.register(OneTimeCode)
@@ -62,4 +62,4 @@ class OneTimeCodeAdmin(admin.ModelAdmin):
         return False  # Prevent manual creation of codes through admin
     
     def has_change_permission(self, request, obj=None):
-        return False  # Make codes read-only in admin
+        return False     

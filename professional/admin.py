@@ -7,6 +7,7 @@ from .models import (
     ProfessionalInventory,
     ProfessionalTask,
     ProfessionalRating,
+    ProfessionalPayout,
 )
 
 
@@ -58,3 +59,11 @@ class ProfessionalRatingAdmin(admin.ModelAdmin):
     list_display = ('professional', 'user', 'rating', 'created_at')
     search_fields = ('professional__user__email', 'user__email')
     list_filter = ('rating', 'created_at')
+
+
+@admin.register(ProfessionalPayout)
+class ProfessionalPayoutAdmin(admin.ModelAdmin):
+    list_display = ('professional', 'payouts_enabled', 'onboarding_complete', 'last_payout_status', 'last_payout_date')
+    search_fields = ('professional__user__email', 'stripe_account_id')
+    list_filter = ('payouts_enabled', 'onboarding_complete', 'last_payout_date')
+    readonly_fields = ('created_at', 'updated_at')

@@ -214,23 +214,6 @@ class JobServiceType(models.Model):
         return super().save(*args, **kwargs)
 
 
-class JobRate(models.Model):
-    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='rate')
-    rate = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
-    rated_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        constraints = [
-            models.CheckConstraint(check=Q(rate__gte=1) & Q(rate__lte=5), name='chk_jobrate_between_1_5'),
-        ]
-        indexes = [
-            models.Index(fields=['rated_at']),
-        ]
-
-    def __str__(self):
-        return f"Rating {self.rate} for {self.job.title}"
-
-
 class JobUnitUpdateRequest(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='unit_update_requests')
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='unit_update_requests')
@@ -344,3 +327,19 @@ class JobOffer(models.Model):
             self.save(update_fields=['status', 'accepted_at', 'updated_at'])
         except IntegrityError:
             raise ValidationError('Another offer was accepted for this job just now. Please refresh.')
+
+class JobRate(models.Model):
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='rate')
+    rate = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    rated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(check=Q(rate__gte=1) & Q(rate__lte=5), name='chk_jobrate_between_1_5'),
+        ]
+        indexes = [
+            models.Index(fields=['rated_at']),
+        ]
+
+    def __str__(self):
+        return f"Rating {self.rate} for {self.job.title}"
