@@ -1,35 +1,38 @@
--- Insert Professional records for each user
 INSERT INTO professional_professional (
-    user_id, license_number, government_issued_id, certification, is_verified, verification_status
+    user_id, 
+    license_number, 
+    government_issued_id,
+    verification_status,
+    is_verified
 )
-SELECT
-    id,
-    'LIC-' || id,
-    'driver_license',
-    NULL,
-    true,
-    'approved'
-FROM user_customuser;
+SELECT 
+    id AS user_id,
+    'LIC' || printf('%06d', id) AS license_number,
+    'driver_license' AS government_issued_id,
+    'pending' AS verification_status,
+    0 AS is_verified
+FROM user_customuser 
+WHERE (id % 2) = 0;
 
--- Insert ProfessionalService records for each professional
--- Assign each professional 1-3 services (service IDs 1, 2, 3 for demonstration)
 INSERT INTO professional_professionalservice (service_id, professional_id)
 SELECT
-    s.id AS service_id,
+    ((p.id - 1) % (SELECT MAX(id) FROM service_service)) + 1 AS service_id,
     p.id AS professional_id
 FROM professional_professional p
-JOIN service_service s ON s.id = ((p.id - 1) % 5) + 1 OR s.id = ((p.id) % 5) + 1
-ORDER BY p.id, s.id
-LIMIT 3 * (SELECT COUNT(*) FROM professional_professional); -- Each professional gets up to 3 services
+JOIN user_customuser u ON u.id = p.user_id
+WHERE (u.id % 2) = 0;
 
--- If you want only one service per professional, use:
--- INSERT INTO professional_professionalservice (service_id, professional_id)
--- SELECT ((p.id - 1) % 5) + 1, p.id FROM professional_professional p;
+INSERT INTO professional_professionalservice (service_id, professional_id)
+SELECT
+    ((p.id) % (SELECT MAX(id) FROM service_service)) + 1 AS service_id,
+    p.id AS professional_id
+FROM professional_professional p
+JOIN user_customuser u ON u.id = p.user_id
+WHERE (u.id % 2) = 0
+AND NOT EXISTS (
+    SELECT 1 
+    FROM professional_professionalservice ps 
+    WHERE ps.professional_id = p.id 
+    AND ps.service_id = ((p.id) % (SELECT MAX(id) FROM service_service)) + 1
+);
 
--- Note: If you have any lines like:
--- INSERT INTO some_table (created_at) VALUES (NOW());
--- Change to:
--- INSERT INTO some_table (created_at) VALUES (CURRENT_TIMESTAMP);
--- INSERT INTO some_table (created_at) VALUES (NOW());
--- Change to:
--- INSERT INTO some_table (created_at) VALUES (CURRENT_TIMESTAMP);

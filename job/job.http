@@ -1,0 +1,28 @@
+POST /api/jobs/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "Cleaning Service needed for Kitchen",
+  "description": "Need professional cleaning for kitchen including appliances",
+  "start_date": "2025-07-15",
+  "start_time": "10:00:00",
+  "unit_num": 3,
+  "service": 1,
+  "address": {
+    "street_number": "456",
+    "street_name": "Oak Avenue",
+    "unit_suite": "Unit 12",
+    "city_name": "Toronto",
+    "province_name": "Ontario",
+    "country_name": "Canada",
+    "postal_code": "M5H2N2"
+  },
+  "job_attachments": [],
+  "job_service_types": [
+    { "service_type_id": 1 },
+    { "service_type_id": 2 }
+  ]
+}
+
+

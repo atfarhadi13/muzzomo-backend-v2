@@ -1,3 +1,7 @@
-from django.shortcuts import render
+from rest_framework import permissions, generics
 
-# Create your views here.
+from .serializers import JobCreateSerializer
+
+class JobCreateView(generics.CreateAPIView):
+    serializer_class = JobCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]

@@ -1,7 +1,5 @@
--- Country
 INSERT INTO address_country (name, code) VALUES ('Canada', 'CA');
 
--- Provinces
 INSERT INTO address_province (name, country_id, code) VALUES
 ('Alberta', (SELECT id FROM address_country WHERE code='CA'), 'AB'),
 ('British Columbia', (SELECT id FROM address_country WHERE code='CA'), 'BC'),
@@ -17,7 +15,6 @@ INSERT INTO address_province (name, country_id, code) VALUES
 ('Saskatchewan', (SELECT id FROM address_country WHERE code='CA'), 'SK'),
 ('Yukon', (SELECT id FROM address_country WHERE code='CA'), 'YT');
 
--- Cities (3 per province, you can add more)
 INSERT INTO address_city (name, province_id) VALUES
 ('Calgary', (SELECT id FROM address_province WHERE code='AB')),
 ('Edmonton', (SELECT id FROM address_province WHERE code='AB')),
@@ -71,8 +68,6 @@ INSERT INTO address_city (name, province_id) VALUES
 ('Dawson City', (SELECT id FROM address_province WHERE code='YT')),
 ('Watson Lake', (SELECT id FROM address_province WHERE code='YT'));
 
--- Addresses (10 per city, sample data, user_id must exist in user_customuser table)
--- Example for Calgary, repeat for other cities as needed
 INSERT INTO address_address (
     user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated
 ) VALUES
@@ -87,7 +82,6 @@ INSERT INTO address_address (
 (1, '109', 'Main St', NULL, (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1A9', 51.0455, -114.0727, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '110', 'Main St', 'F', (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1B0', 51.0456, -114.0728, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Calgary
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '101', 'Main St', 'A', (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1A1', 51.0447, -114.0719, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '102', 'Main St', 'B', (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1A2', 51.0448, -114.0720, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -100,7 +94,6 @@ INSERT INTO address_address (user_id, street_number, street_name, unit_suite, ci
 (1, '109', 'Main St', NULL, (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1A9', 51.0455, -114.0727, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '110', 'Main St', 'F', (SELECT id FROM address_city WHERE name='Calgary'), 'T2P1B0', 51.0456, -114.0728, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Edmonton
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '201', 'Jasper Ave', '1A', (SELECT id FROM address_city WHERE name='Edmonton'), 'T5J1N1', 53.5461, -113.4938, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '202', 'Jasper Ave', '2B', (SELECT id FROM address_city WHERE name='Edmonton'), 'T5J1N2', 53.5462, -113.4939, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -113,7 +106,6 @@ INSERT INTO address_address (user_id, street_number, street_name, unit_suite, ci
 (1, '209', 'Whyte Ave', NULL, (SELECT id FROM address_city WHERE name='Edmonton'), 'T6E1Z9', 53.5469, -113.4946, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '210', 'Whyte Ave', '6F', (SELECT id FROM address_city WHERE name='Edmonton'), 'T6E1Y0', 53.5470, -113.4947, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Red Deer
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '301', 'Ross St', 'A', (SELECT id FROM address_city WHERE name='Red Deer'), 'T4N1A1', 52.2681, -113.8112, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '302', 'Ross St', 'B', (SELECT id FROM address_city WHERE name='Red Deer'), 'T4N1A2', 52.2682, -113.8113, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -126,7 +118,6 @@ INSERT INTO address_address (user_id, street_number, street_name, unit_suite, ci
 (1, '309', 'Gaetz Ave', NULL, (SELECT id FROM address_city WHERE name='Red Deer'), 'T4N1A9', 52.2689, -113.8120, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '310', 'Gaetz Ave', 'F', (SELECT id FROM address_city WHERE name='Red Deer'), 'T4N1B0', 52.2690, -113.8121, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Vancouver
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '401', 'Granville St', '101', (SELECT id FROM address_city WHERE name='Vancouver'), 'V6Z1A1', 49.2827, -123.1207, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '402', 'Granville St', '102', (SELECT id FROM address_city WHERE name='Vancouver'), 'V6Z1A2', 49.2828, -123.1208, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -139,10 +130,7 @@ INSERT INTO address_address (user_id, street_number, street_name, unit_suite, ci
 (1, '409', 'Robson St', NULL, (SELECT id FROM address_city WHERE name='Vancouver'), 'V6Z1A9', 49.2835, -123.1215, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '410', 'Robson St', '106', (SELECT id FROM address_city WHERE name='Vancouver'), 'V6Z1B0', 49.2836, -123.1216, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Repeat similar blocks for each city, changing city_id, street_number, street_name, postal_code, latitude, longitude as needed.
--- Make sure user_id exists in user_customuser table.
 
--- Example for Victoria
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '501', 'Douglas St', '201', (SELECT id FROM address_city WHERE name='Victoria'), 'V8W1A1', 48.4284, -123.3656, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '502', 'Douglas St', '202', (SELECT id FROM address_city WHERE name='Victoria'), 'V8W1A2', 48.4285, -123.3657, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -155,7 +143,6 @@ INSERT INTO address_address (user_id, street_number, street_name, unit_suite, ci
 (1, '509', 'Government St', NULL, (SELECT id FROM address_city WHERE name='Victoria'), 'V8W1A9', 48.4292, -123.3664, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '510', 'Government St', '206', (SELECT id FROM address_city WHERE name='Victoria'), 'V8W1B0', 48.4293, -123.3665, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- Toronto
 INSERT INTO address_address (user_id, street_number, street_name, unit_suite, city_id, postal_code, latitude, longitude, date_created, date_updated) VALUES
 (1, '601', 'Yonge St', '301', (SELECT id FROM address_city WHERE name='Toronto'), 'M4W1A1', 43.6510, -79.3802, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1, '602', 'Yonge St', '302', (SELECT id FROM address_city WHERE name='Toronto'), 'M4W1A2', 43.6511, -79.3803, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
