@@ -137,9 +137,10 @@ class Job(models.Model):
         return Decimal("0.00") if self.is_paid else self.total_price
 
     def _validate_dates(self):
-        if self.completed_date and self.completed_date < self.submit_date:
+        ref = self.submit_date or timezone.now()
+        if self.completed_date and self.completed_date < ref:
             raise ValidationError({'completed_date': 'Completion date cannot precede submission date.'})
-        if self.start_at and self.start_at < self.submit_date:
+        if self.start_at and self.start_at < ref:
             raise ValidationError({'start_at': 'Start time cannot precede submission date.'})
 
     def _validate_status(self):

@@ -1,6 +1,8 @@
+import re
+
 import stripe
 
-from datetime import datetime
+from datetime import datetime, date, time
 from decimal import Decimal
 
 from django.conf import settings
@@ -32,6 +34,7 @@ from job.models import (
 
 from professional.models import Professional, ProfessionalService
 from address.models import Address, Country, Province, City
+from service.models import ServiceType
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -40,16 +43,78 @@ class JobCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @staticmethod
-    def _make_start_at(start_date, start_time):
-        if not start_date or not start_time:
+    def _coerce_date(val):
+        if not val:
             return None
-        dt = datetime.combine(start_date, start_time)
+        if isinstance(val, date) and not isinstance(val, datetime):
+            return val
+        if isinstance(val, str):
+            return date.fromisoformat(val)
+        raise ValueError("start_date must be a date or ISO date string")
+
+    @staticmethod
+    def _coerce_time(val):
+        if not val:
+            return None
+        if isinstance(val, time):
+            return val
+        if isinstance(val, str):
+            return time.fromisoformat(val)
+        raise ValueError("start_time must be a time or ISO time string")
+
+    def _make_start_at(self, start_date, start_time):
+        d = self._coerce_date(start_date)
+        t = self._coerce_time(start_time)
+        if not d or not t:
+            return None
+        dt = datetime.combine(d, t)
         if timezone.is_naive(dt):
             dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
     @staticmethod
+    def _extract_address_from_form(data):
+        keys = [
+            "address[street_number]",
+            "address[street_name]",
+            "address[unit_suite]",
+            "address[city_name]",
+            "address[province_name]",
+            "address[country_name]",
+            "address[postal_code]",
+        ]
+        if not any(k in data for k in keys):
+            return None
+        return {
+            "street_number": data.get("address[street_number]"),
+            "street_name": data.get("address[street_name]"),
+            "unit_suite": data.get("address[unit_suite]"),
+            "city_name": data.get("address[city_name]"),
+            "province_name": data.get("address[province_name]"),
+            "country_name": data.get("address[country_name]"),
+            "postal_code": data.get("address[postal_code]"),
+        }
+
+    @staticmethod
+    def _extract_service_types_from_form(data):
+        pattern = re.compile(r"^job_service_types\[(\d+)\]\[service_type_id\]$")
+        items = []
+        for k, v in data.items():
+            m = pattern.match(k)
+            if m:
+                items.append((int(m.group(1)), v))
+        if not items:
+            return None
+        items.sort(key=lambda x: x[0])
+        return [{"service_type_id": int(val)} for _, val in items if str(val).isdigit()]
+
+    @staticmethod
     def _resolve_address(user, data: dict) -> Address:
+        required = ["country_name", "province_name", "city_name", "street_number", "street_name", "postal_code"]
+        missing = [k for k in required if not data.get(k)]
+        if missing:
+            raise ValueError(f"Address fields missing/empty: {', '.join(missing)}")
+
         country = Country.objects.filter(name__iexact=data["country_name"]).first()
         if not country:
             raise ValueError("Country not found. Seed countries first.")
@@ -74,6 +139,11 @@ class JobCreateView(generics.CreateAPIView):
         city = job.address.city
         service = job.service
         start_at = job.start_at
+
+        print(f'city : {city}')
+        print(f'service : {service}')
+        print(f'start_at : {start_at}')
+
         professionals_in_city = Professional.objects.filter(
             user__addresses__city=city,
             verification_status='approved',
@@ -91,22 +161,29 @@ class JobCreateView(generics.CreateAPIView):
                 assigned_jobs__completed_date__gte=start_at
             )
         available_pros = qs.distinct()
-        offers = [JobOffer(job=job, professional=pro) for pro in available_pros]
-        JobOffer.objects.bulk_create(offers)
-        return len(offers)
+        JobOffer.objects.bulk_create([JobOffer(job=job, professional=pro) for pro in available_pros])
+        return available_pros.count()
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         user = request.user
+
         try:
+            address_payload = data.get("address")
+            if isinstance(address_payload, dict):
+                addr_payload = address_payload
+            else:
+                addr_payload = self._extract_address_from_form(data) or {}
+
+            st_inputs = data.get("job_service_types")
+            if not isinstance(st_inputs, list):
+                st_inputs = self._extract_service_types_from_form(data) or []
+
             start_date = data.get("start_date")
             start_time = data.get("start_time")
-            address_payload = data.get("address") or {}
-            st_inputs = data.get("job_service_types") or []
-            files = data.get("job_attachments")
 
-            address = self._resolve_address(user, address_payload)
+            address = self._resolve_address(user, addr_payload)
             data["address"] = address.id
 
             serializer = self.get_serializer(data=data)
@@ -118,15 +195,12 @@ class JobCreateView(generics.CreateAPIView):
             )
 
             if st_inputs:
-                st_ids = [x["service_type_id"] for x in st_inputs]
+                st_ids = [int(x["service_type_id"]) for x in st_inputs]
                 JobServiceType.objects.bulk_create(
                     [JobServiceType(job=job, service_type_id=st_id) for st_id in st_ids]
                 )
 
-            if hasattr(request, "FILES") and hasattr(request.FILES, "getlist"):
-                file_list = request.FILES.getlist("job_attachments")
-            else:
-                file_list = files if isinstance(files, list) else []
+            file_list = request.FILES.getlist("job_attachments") if hasattr(request.FILES, "getlist") else []
             for f in file_list:
                 JobAttachment.objects.create(job=job, attachment=f)
 
@@ -135,6 +209,7 @@ class JobCreateView(generics.CreateAPIView):
                 {"job_id": job.id, "message": f"Job created successfully. Offered to {offer_count} professionals."},
                 status=status.HTTP_201_CREATED,
             )
+
         except Exception as e:
             transaction.set_rollback(True)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -147,18 +222,95 @@ class JobUpdateView(generics.UpdateAPIView):
         return Job.objects.filter(user=self.request.user)
 
     @staticmethod
-    def _make_start_at(start_date, start_time):
-        if start_date is None and start_time is None:
+    def _first(val):
+        if isinstance(val, (list, tuple)):
+            return val[0] if val else None
+        return val
+
+    @staticmethod
+    def _coerce_date(val):
+        v = JobUpdateView._first(val)
+        if not v:
             return None
-        if not start_date or not start_time:
+        if isinstance(v, date) and not isinstance(v, datetime):
+            return v
+        if isinstance(v, str):
+            return date.fromisoformat(v)
+        raise ValueError("start_date must be a date or ISO date string")
+
+    @staticmethod
+    def _coerce_time(val):
+        v = JobUpdateView._first(val)
+        if not v:
+            return None
+        if isinstance(v, time):
+            return v
+        if isinstance(v, str):
+            return time.fromisoformat(v)
+        raise ValueError("start_time must be a time or ISO time string")
+
+    def _make_start_at(self, start_date, start_time):
+        d = self._coerce_date(start_date)
+        t = self._coerce_time(start_time)
+        if d is None and t is None:
+            return None
+        if not d or not t:
             raise ValueError("Both start_date and start_time are required to update start_at.")
-        dt = datetime.combine(start_date, start_time)
+        dt = datetime.combine(d, t)
         if timezone.is_naive(dt):
             dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
     @staticmethod
+    def _extract_address_from_form(data):
+        keys = [
+            "address[street_number]",
+            "address[street_name]",
+            "address[unit_suite]",
+            "address[city_name]",
+            "address[province_name]",
+            "address[country_name]",
+            "address[postal_code]",
+        ]
+        if not any(k in data for k in keys):
+            return None
+        return {
+            "street_number": JobUpdateView._first(data.get("address[street_number]")),
+            "street_name": JobUpdateView._first(data.get("address[street_name]")),
+            "unit_suite": JobUpdateView._first(data.get("address[unit_suite]")),
+            "city_name": JobUpdateView._first(data.get("address[city_name]")),
+            "province_name": JobUpdateView._first(data.get("address[province_name]")),
+            "country_name": JobUpdateView._first(data.get("address[country_name]")),
+            "postal_code": JobUpdateView._first(data.get("address[postal_code]")),
+        }
+
+    @staticmethod
+    def _extract_service_types_from_form(data):
+        pattern = re.compile(r"^job_service_types\[(\d+)\]\[service_type_id\]$")
+        items = []
+        for k, v in data.items():
+            m = pattern.match(k)
+            if m:
+                val = JobUpdateView._first(v)
+                items.append((int(m.group(1)), val))
+        if not items:
+            return None
+        items.sort(key=lambda x: x[0])
+        out = []
+        for _, val in items:
+            if val is None:
+                continue
+            sval = str(val)
+            if sval.isdigit():
+                out.append({"service_type_id": int(sval)})
+        return out
+
+    @staticmethod
     def _resolve_address(user, data: dict) -> Address:
+        required = ["country_name", "province_name", "city_name", "street_number", "street_name", "postal_code"]
+        missing = [k for k in required if not data.get(k)]
+        if missing:
+            raise ValueError(f"Address fields missing/empty: {', '.join(missing)}")
         country = Country.objects.filter(name__iexact=data["country_name"]).first()
         if not country:
             raise ValueError("Country not found. Seed countries first.")
@@ -186,12 +338,19 @@ class JobUpdateView(generics.UpdateAPIView):
 
         start_date = data.pop("start_date", None)
         start_time = data.pop("start_time", None)
-        address_payload = data.pop("address", None)
-        st_inputs = data.pop("job_service_types", None)
-        _files_payload = data.pop("job_attachments", None)
 
-        if address_payload:
-            address = self._resolve_address(request.user, address_payload)
+        address_payload = data.pop("address", None)
+        if isinstance(address_payload, dict):
+            addr_payload = address_payload
+        else:
+            addr_payload = self._extract_address_from_form(request.data)
+
+        st_inputs = data.pop("job_service_types", None)
+        if not isinstance(st_inputs, list):
+            st_inputs = self._extract_service_types_from_form(request.data) if st_inputs is None else st_inputs
+
+        if addr_payload:
+            address = self._resolve_address(request.user, addr_payload)
             data["address"] = address.id
 
         new_start_at = None
@@ -199,16 +358,24 @@ class JobUpdateView(generics.UpdateAPIView):
             new_start_at = self._make_start_at(start_date, start_time)
 
         target_service_id = data.get("service") or instance.service_id
-        if st_inputs:
-            st_ids = [x["service_type_id"] for x in st_inputs]
-            valid = ServiceType.objects.filter(id__in=st_ids, service_id=target_service_id).count() == len(st_ids)
-            if not valid:
-                return Response({"job_service_types": "All service types must belong to the selected service."},
-                                status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target_service_id = int(target_service_id)
+        except (TypeError, ValueError):
+            pass
 
+        if st_inputs:
+            st_ids = [int(x["service_type_id"]) for x in st_inputs if "service_type_id" in x]
+            if st_ids:
+                valid_count = ServiceType.objects.filter(id__in=st_ids, service_id=target_service_id).count()
+                if valid_count != len(st_ids):
+                    return Response(
+                        {"job_service_types": "All service types must belong to the selected service."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
         job = serializer.save()
+
         if new_start_at is not None:
             job.start_at = new_start_at
             job.save(update_fields=["start_at", "updated_at"])
@@ -217,24 +384,21 @@ class JobUpdateView(generics.UpdateAPIView):
             JobServiceType.objects.filter(job=job).delete()
             if st_inputs:
                 JobServiceType.objects.bulk_create(
-                    [JobServiceType(job=job, service_type_id=st["service_type_id"]) for st in st_inputs]
+                    [JobServiceType(job=job, service_type_id=int(st["service_type_id"])) for st in st_inputs]
                 )
 
-        if hasattr(request, "FILES") and hasattr(request.FILES, "getlist"):
+        if hasattr(request.FILES, "getlist"):
             file_list = request.FILES.getlist("job_attachments")
-        else:
-            file_list = _files_payload if isinstance(_files_payload, list) else None
-
-        if file_list is not None:
-            old_files = list(JobAttachment.objects.filter(job=job))
-            for att in old_files:
-                storage = att.attachment.storage
-                name = att.attachment.name
-                att.delete()
-                if name:
-                    storage.delete(name)
-            for f in file_list:
-                JobAttachment.objects.create(job=job, attachment=f)
+            if file_list:
+                old_files = list(JobAttachment.objects.filter(job=job))
+                for att in old_files:
+                    storage = att.attachment.storage
+                    name = att.attachment.name
+                    att.delete()
+                    if name:
+                        storage.delete(name)
+                for f in file_list:
+                    JobAttachment.objects.create(job=job, attachment=f)
 
         return Response(self.get_serializer(job).data, status=status.HTTP_200_OK)
     
@@ -327,7 +491,6 @@ class JobListView(generics.ListAPIView):
 
         return qs.distinct()
 
-
 class JobRetrieveView(generics.RetrieveAPIView):
     serializer_class = JobDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -397,38 +560,76 @@ class PaymentSuccess(APIView):
     def post(self, request):
         payment_intent_id = request.data.get('payment_intent_id')
         job_id = request.data.get('job_id')
-        if not payment_intent_id or not job_id:
-            return Response({"error": "payment_intent_id and job_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+        amount_paid = request.data.get('amount_paid')
+
+        if not payment_intent_id or not job_id or amount_paid is None:
+            return Response(
+                {"error": "payment_intent_id, job_id, and amount_paid are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         if not request.user.is_provider:
-            return Response({"detail": "Only providers can confirm payment."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Only providers can confirm payment."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         job = get_object_or_404(Job, id=job_id, user=request.user)
+
         try:
-            pi = stripe.PaymentIntent.retrieve(payment_intent_id)
-            if pi.status != "succeeded":
-                return Response({"error": "Payment not confirmed."}, status=status.HTTP_400_BAD_REQUEST)
-            if str(pi.metadata.get("job_id")) != str(job.id):
-                return Response({"error": "Payment metadata mismatch."}, status=status.HTTP_400_BAD_REQUEST)
-            amount_received_cents = pi.amount_received or 0
-            expected_cents = int(job.total_price.quantize(Decimal("0.01")) * 100)
-            is_fully_paid = amount_received_cents >= expected_cents
-            job.is_paid = is_fully_paid
-            job.stripe_session_id = payment_intent_id
-            job.save(update_fields=['stripe_session_id', 'is_paid', 'updated_at'])
-            return Response(
-                {
-                    "message": "Payment processed.",
-                    "paid_units": str(job.paid_units),
-                    "remaining_units": str(job.remaining_units),
-                    "outstanding_amount": str(job.outstanding_amount),
-                    "unit_price": str(job.unit_price),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except stripe.error.StripeError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            amt = Decimal(str(amount_paid)).quantize(Decimal("0.01"))
+        except Exception:
+            return Response({"error": "amount_paid must be a valid number."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if amt < Decimal("0.00"):
+            return Response({"error": "amount_paid cannot be negative."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        expected_total = job.total_price.quantize(Decimal("0.01"))
+
+        field_name = None
+        if hasattr(job, "paid_amount"):
+            field_name = "paid_amount"
+        elif hasattr(job, "collected_amount"):
+            field_name = "collected_amount"
+        elif hasattr(job, "amount_paid"):
+            field_name = "amount_paid"
+        else:
+            field_name = "total_price"
+
+        current_paid = getattr(job, field_name, Decimal("0.00")) or Decimal("0.00")
+        try:
+            current_paid = Decimal(str(current_paid)).quantize(Decimal("0.01"))
+        except Exception:
+            current_paid = Decimal("0.00")
+
+        remaining = (expected_total - current_paid).quantize(Decimal("0.01"))
+        applied = min(amt, max(remaining, Decimal("0.00")))
+        new_paid = (current_paid + applied).quantize(Decimal("0.01"))
+
+        setattr(job, field_name, new_paid)
+        job.is_paid = new_paid >= expected_total
+        job.stripe_session_id = str(payment_intent_id)
+
+        update_fields = [field_name, 'is_paid', 'stripe_session_id', 'updated_at']
+        job.save(update_fields=update_fields)
+
+        return Response(
+            {
+                "message": "Payment processed.",
+                "payment_intent_id": str(payment_intent_id),
+                "applied_amount": str(applied),
+                "submitted_amount": str(amt),
+                "total_expected": str(expected_total),
+                "total_paid": str(new_paid),
+                "is_fully_paid": job.is_paid,
+                "paid_units": str(job.paid_units),
+                "remaining_units": str(job.remaining_units),
+                "outstanding_amount": str(job.outstanding_amount),
+                "unit_price": str(job.unit_price),
+                "accumulator_field": field_name
+            },
+            status=status.HTTP_200_OK,
+        )
         
 class JobRateViewSet(viewsets.ModelViewSet):
     queryset = JobRate.objects.all()

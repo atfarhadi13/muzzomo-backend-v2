@@ -1,153 +1,194 @@
-POST /api/jobs/
-Authorization: Bearer <token>
+==============================
+ JOB MANAGEMENT API ENDPOINTS
+==============================
+
+AUTH HEADERS REQUIRED:
+Authorization: Bearer <your_token>
 Content-Type: application/json
 
+------------------------------
+ JOB CREATION / MANAGEMENT
+------------------------------
+
+POST   /jobs/
+→ Create a new job (with address, service types, attachments)
+Body (JSON Format):
 {
-  "title": "Cleaning Service needed for Kitchen",
-  "description": "Need professional cleaning for kitchen including appliances",
-  "start_date": "2025-07-15",
-  "start_time": "10:00:00",
-  "unit_num": 3,
-  "service": 1,
+  "title": "Fix kitchen sink",
+  "description": "Pipe leaking",
+  "service": 12,
+  "start_date": "2025-10-12",
+  "start_time": "14:30:00",
   "address": {
-    "street_number": "456",
-    "street_name": "Oak Avenue",
-    "unit_suite": "Unit 12",
+    "street_number": "123",
+    "street_name": "Main St",
+    "unit_suite": "3A",
     "city_name": "Toronto",
     "province_name": "Ontario",
     "country_name": "Canada",
-    "postal_code": "M5H2N2"
+    "postal_code": "M5V3L9"
   },
-  "job_attachments": [],
   "job_service_types": [
-    { "service_type_id": 1 },
-    { "service_type_id": 2 }
+    {"service_type_id": 101},
+    {"service_type_id": 102}
   ]
 }
 
-### Job List & Detail
-GET /api/jobs/list/
-Authorization: Bearer <token>
+Body (Form Data Format):
+title = Fix kitchen sink
+description = Pipe leaking under sink
+service = 1
+start_date = 2025-10-15
+start_time = 14:30:00
+address[street_number] = 123
+address[street_name] = Main St
+address[unit_suite] = 3A
+address[city_name] = Toronto
+address[province_name] = Ontario
+address[country_name] = Canada
+address[postal_code] = M5V3L9
+job_service_types[0][service_type_id] = 1
+job_service_types[1][service_type_id] = 2
+job_attachments = @/path/to/image.jpg
 
-GET /api/jobs/{id}/
-Authorization: Bearer <token>
+GET    /jobs/list/
+→ List all jobs of the authenticated user
+Params (optional):
+?status=pending,in_progress
+&service=12
+&service_types=101,102
+&city=Toronto
+&province=ON
+&is_paid=true
+&ordering=-created_at
 
-### Job Update & Delete
-PATCH /api/jobs/{id}/update/
-Authorization: Bearer <token>
-Content-Type: application/json
+GET    /jobs/<id>/
+→ Retrieve job details
 
+PATCH  /jobs/<id>/update/
+→ Update job info, address, service types, or attachments (old ones removed)
+Body (example):
 {
-    "title": "Updated Job Title",
-    "description": "Updated description",
-    "start_date": "2025-07-15",
-    "start_time": "11:00:00",
-    "address": {
-        "street_number": "789",
-        "street_name": "New Street",
-        "unit_suite": "Suite 15",
-        "city_name": "Toronto",
-        "province_name": "Ontario",
-        "country_name": "Canada",
-        "postal_code": "M5H2N3"
-    }
+  "title": "Fix kitchen sink - urgent",
+  "description": "Pipe burst",
+  "start_date": "2025-10-13",
+  "start_time": "16:00:00",
+  "address": {
+    "street_number": "456",
+    "street_name": "Queen St",
+    "city_name": "Toronto",
+    "province_name": "Ontario",
+    "country_name": "Canada",
+    "postal_code": "M5V1L9"
+  }
 }
 
-DELETE /api/jobs/{id}/delete/
-Authorization: Bearer <token>
+DELETE /jobs/<id>/delete/
+→ Delete job (only if NOT paid and status NOT in_progress/completed)
 
-### Payment Endpoints
-POST /api/payment-sheet/
-Authorization: Bearer <token>
-Content-Type: application/json
 
-{
-    "job_id": 1
+------------------------------
+ PAYMENT
+------------------------------
+
+POST   /payment-sheet/
+→ Create Stripe PaymentIntent for a job
+Body: { "job_id": 345 }
+
+POST   /payment-success/
+→ Confirm successful payment
+Body: {
+  "payment_intent_id": "pi_123",
+  "job_id": 345
 }
 
-POST /api/payment-success/
-Authorization: Bearer <token>
-Content-Type: application/json
 
+------------------------------
+ JOB UNIT UPDATE REQUESTS
+------------------------------
+
+POST   /jobs/unit-update-requests/
+→ Professional sends a unit quantity update request
+Body:
 {
-    "payment_intent_id": "pi_xxxxx",
-    "job_id": 1
+  "job_id": 345,
+  "new_unit_qty": "3.5"
 }
 
-### Job Unit Update Requests
-POST /api/jobs/unit-update-requests/
-Authorization: Bearer <token>
-Content-Type: application/json
+GET    /jobs/unit-update-requests/owner/
+→ Job owner lists all unit update requests on their jobs
+Params (optional): ?status=pending,accepted&job=345
 
+GET    /jobs/unit-update-requests/pro/
+→ Professional lists their own unit update requests
+Params (optional): ?status=pending,rejected
+
+POST   /jobs/unit-update-requests/<id>/accept/
+→ Job owner accepts unit update request
+
+POST   /jobs/unit-update-requests/<id>/reject/
+→ Job owner rejects unit update request
+
+
+------------------------------
+ JOB OFFERS (Professionals)
+------------------------------
+
+GET    /offers/
+→ Professional lists job offers sent to them
+Params: ?status=sent,viewed,accepted
+
+POST   /offers/<id>/accept/
+→ Professional accepts an offer (assigns job)
+
+
+------------------------------
+ PROFESSIONAL JOBS
+------------------------------
+
+GET    /pro/jobs/list/
+→ List all jobs assigned to the professional
+Params (same filters as job list)
+
+GET    /pro/jobs/<id>/
+→ Retrieve details of a professional’s assigned job
+
+
+------------------------------
+ JOB DETAILS (Extra Info)
+------------------------------
+
+GET    /jobs/<id>/attachments/
+→ Retrieve all job attachments (files uploaded)
+
+GET    /jobs/<id>/service-types/
+→ Retrieve all service types associated with a job
+
+GET    /jobs/<id>/address/
+→ Retrieve the full address details of a job
+
+
+------------------------------
+ JOB RATINGS
+------------------------------
+
+POST   /job-rates/
+→ Create a rating for a completed job
+Body:
 {
-    "job": 1,
-    "new_unit_qty": 5,
-    "reason": "Additional work required"
+  "job_id": 345,
+  "rate": 5
 }
 
-GET /api/jobs/unit-update-requests/owner/
-Authorization: Bearer <token>
+GET    /job-rates/
+→ List all job ratings
 
-GET /api/jobs/unit-update-requests/pro/
-Authorization: Bearer <token>
-
-POST /api/jobs/unit-update-requests/{id}/accept/
-Authorization: Bearer <token>
-
-POST /api/jobs/unit-update-requests/{id}/reject/
-Authorization: Bearer <token>
-
-### Job Offers
-GET /api/offers/
-Authorization: Bearer <token>
-
-POST /api/offers/{id}/accept/
-Authorization: Bearer <token>
-
-### Professional Job Management
-GET /api/pro/jobs/list/
-Authorization: Bearer <token>
-
-GET /api/pro/jobs/{id}/
-Authorization: Bearer <token>
-
-### Job Attachments & Details
-GET /api/jobs/{id}/attachments/
-Authorization: Bearer <token>
-
-GET /api/jobs/{id}/service-types/
-Authorization: Bearer <token>
-
-GET /api/jobs/{id}/address/
-Authorization: Bearer <token>
-
-### Job Rates
-POST /api/job-rates/
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-    "job": 1,
-    "rating": 5,
-    "comment": "Excellent work"
-}
-
-GET /api/job-rates/
-Authorization: Bearer <token>
-
-GET /api/job-rates/{id}/
-Authorization: Bearer <token>
-
-PATCH /api/job-rates/{id}/
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-    "rating": 4,
-    "comment": "Updated review"
-}
-
-DELETE /api/job-rates/{id}/
-Authorization: Bearer <token>
+GET    /job-rates/<id>/
+PATCH  /job-rates/<id>/
+DELETE /job-rates/<id>/
+→ Retrieve / update / delete a rating
 
 
+==============================
+ END OF JOB API ENDPOINTS
+==============================
