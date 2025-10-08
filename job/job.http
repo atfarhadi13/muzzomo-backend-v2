@@ -25,4 +25,129 @@ Content-Type: application/json
   ]
 }
 
+### Job List & Detail
+GET /api/jobs/list/
+Authorization: Bearer <token>
+
+GET /api/jobs/{id}/
+Authorization: Bearer <token>
+
+### Job Update & Delete
+PATCH /api/jobs/{id}/update/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "title": "Updated Job Title",
+    "description": "Updated description",
+    "start_date": "2025-07-15",
+    "start_time": "11:00:00",
+    "address": {
+        "street_number": "789",
+        "street_name": "New Street",
+        "unit_suite": "Suite 15",
+        "city_name": "Toronto",
+        "province_name": "Ontario",
+        "country_name": "Canada",
+        "postal_code": "M5H2N3"
+    }
+}
+
+DELETE /api/jobs/{id}/delete/
+Authorization: Bearer <token>
+
+### Payment Endpoints
+POST /api/payment-sheet/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "job_id": 1
+}
+
+POST /api/payment-success/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "payment_intent_id": "pi_xxxxx",
+    "job_id": 1
+}
+
+### Job Unit Update Requests
+POST /api/jobs/unit-update-requests/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "job": 1,
+    "new_unit_qty": 5,
+    "reason": "Additional work required"
+}
+
+GET /api/jobs/unit-update-requests/owner/
+Authorization: Bearer <token>
+
+GET /api/jobs/unit-update-requests/pro/
+Authorization: Bearer <token>
+
+POST /api/jobs/unit-update-requests/{id}/accept/
+Authorization: Bearer <token>
+
+POST /api/jobs/unit-update-requests/{id}/reject/
+Authorization: Bearer <token>
+
+### Job Offers
+GET /api/offers/
+Authorization: Bearer <token>
+
+POST /api/offers/{id}/accept/
+Authorization: Bearer <token>
+
+### Professional Job Management
+GET /api/pro/jobs/list/
+Authorization: Bearer <token>
+
+GET /api/pro/jobs/{id}/
+Authorization: Bearer <token>
+
+### Job Attachments & Details
+GET /api/jobs/{id}/attachments/
+Authorization: Bearer <token>
+
+GET /api/jobs/{id}/service-types/
+Authorization: Bearer <token>
+
+GET /api/jobs/{id}/address/
+Authorization: Bearer <token>
+
+### Job Rates
+POST /api/job-rates/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "job": 1,
+    "rating": 5,
+    "comment": "Excellent work"
+}
+
+GET /api/job-rates/
+Authorization: Bearer <token>
+
+GET /api/job-rates/{id}/
+Authorization: Bearer <token>
+
+PATCH /api/job-rates/{id}/
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+    "rating": 4,
+    "comment": "Updated review"
+}
+
+DELETE /api/job-rates/{id}/
+Authorization: Bearer <token>
+
 

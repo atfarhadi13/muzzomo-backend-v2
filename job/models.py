@@ -11,13 +11,11 @@ from service.models import Service, ServiceType
 from professional.models import Professional, ProfessionalService
 from address.models import Address
 
-
 class JobStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
     IN_PROGRESS = 'in_progress', 'In Progress'
     COMPLETED = 'completed', 'Completed'
     CANCELLED = 'cancelled', 'Cancelled'
-
 
 class JobOfferStatus(models.TextChoices):
     SENT = 'sent', 'Sent'
@@ -26,13 +24,11 @@ class JobOfferStatus(models.TextChoices):
     DECLINED = 'declined', 'Declined'
     EXPIRED = 'expired', 'Expired'
 
-
 class JobUnitUpdateRequestStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
     ACCEPTED = 'accepted', 'Accepted'
     REJECTED = 'rejected', 'Rejected'
     CANCELLED = 'cancelled', 'Cancelled'
-
 
 class Job(models.Model):
     user = models.ForeignKey(
@@ -123,6 +119,22 @@ class Job(models.Model):
 
     def __str__(self):
         return f"{self.title} by {self.user.email}"
+    
+    @property
+    def unit_price(self):
+        return self.service.price
+
+    @property
+    def paid_units(self):
+        return Decimal("1.00") if self.is_paid else Decimal("0.00")
+
+    @property
+    def remaining_units(self):
+        return Decimal("0.00") if self.is_paid else Decimal("1.00")
+
+    @property
+    def outstanding_amount(self):
+        return Decimal("0.00") if self.is_paid else self.total_price
 
     def _validate_dates(self):
         if self.completed_date and self.completed_date < self.submit_date:
@@ -175,7 +187,6 @@ class Job(models.Model):
     @property
     def computed_total_price(self) -> Decimal:
         return (self.service.price * self.quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
 
 class JobAttachment(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='attachments')

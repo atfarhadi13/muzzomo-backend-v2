@@ -1,32 +1,126 @@
-from datetime import datetime
 from decimal import Decimal
-from django.utils import timezone
+
+from django.db.models import Q
 from django.db import transaction
+
 from rest_framework import serializers
+from rest_framework.serializers import ( ModelSerializer, IntegerField, CharField, 
+                                        DecimalField, DateTimeField, BooleanField )
 
-from job.models import Job, JobAttachment, JobServiceType
-from service.models import Service, ServiceType
-from address.models import Address, Country, Province, City
+from job.models import Job, JobRate, JobStatus, JobUnitUpdateRequest, JobOffer, JobAttachment, JobServiceType
 
-class JobServiceTypeInputSerializer(serializers.Serializer):
-    service_type_id = serializers.IntegerField()
+from professional.models import Professional
+from service.models import ServiceType
 
-class AddressInputSerializer(serializers.Serializer):
-    street_number = serializers.CharField(max_length=20)
-    street_name = serializers.CharField(max_length=255)
-    unit_suite = serializers.CharField(max_length=20, allow_null=True, allow_blank=True, required=False)
-    city_name = serializers.CharField(max_length=100)
-    province_name = serializers.CharField(max_length=100)
-    country_name = serializers.CharField(max_length=100)
-    postal_code = serializers.CharField(max_length=7)
+class UserMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone_number = serializers.CharField(allow_null=True)
+
+
+class ProfessionalMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    is_verified = serializers.BooleanField()
+    verification_status = serializers.CharField()
+    license_number = serializers.CharField()
+    user = UserMiniSerializer(source="user")
+
+
+class CountrySerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    name = serializers.CharField()
+    code = serializers.CharField()
+
+
+class ProvinceSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    name = serializers.CharField()
+    code = serializers.CharField()
+    country = CountrySerializer()
+
+
+class CitySerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    name = serializers.CharField()
+    province = ProvinceSerializer()
+
+
+class AddressSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    street_number = serializers.CharField()
+    street_name = serializers.CharField()
+    unit_suite = serializers.CharField(allow_null=True)
+    postal_code = serializers.CharField()
+    postal_code_formatted = serializers.CharField()
+    city = CitySerializer()
+
+
+class ServiceCategoryMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    title = serializers.CharField()
+
+
+class UnitMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    name = serializers.CharField()
+    code = serializers.CharField(allow_null=True)
+
+
+class ServiceMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    title = serializers.CharField()
+    is_trade_required = serializers.BooleanField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit = UnitMiniSerializer(allow_null=True)
+    categories = ServiceCategoryMiniSerializer(many=True)
+
+class ServiceTypeMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    title = serializers.CharField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True)
+
+class JobAttachmentSerializer(serializers.ModelSerializer):
+    file_name = serializers.SerializerMethodField()
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JobAttachment
+        fields = ["id", "url", "file_name", "uploaded_at"]
+
+    def get_file_name(self, obj):
+        return obj.attachment.name.rsplit("/", 1)[-1] if obj.attachment and obj.attachment.name else None
+    
+    def get_url(self, obj):
+        try:
+            return obj.attachment.url if obj.attachment else None
+        except Exception:
+            return None
+
+class JobAddressSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="pk")
+    street_number = serializers.CharField()
+    street_name = serializers.CharField()
+    unit_suite = serializers.CharField(allow_null=True)
+    postal_code = serializers.CharField()
+    postal_code_formatted = serializers.CharField()
+    city = serializers.CharField(source="city.name")
+    province = serializers.CharField(source="city.province.name")
+    province_code = serializers.CharField(source="city.province.code")
+    country = serializers.CharField(source="city.province.country.name")
+    country_code = serializers.CharField(source="city.province.country.code")
+
+class JobServiceTypeItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="service_type.id", read_only=True)
+    title = serializers.CharField(source="service_type.title", read_only=True)
+    price = serializers.DecimalField(source="service_type.price", max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = JobServiceType
+        fields = ["id", "title", "price"]
 
 class JobCreateSerializer(serializers.ModelSerializer):
-    start_date = serializers.DateField(write_only=True, required=False)
-    start_time = serializers.TimeField(write_only=True, required=False)
-    address = AddressInputSerializer(write_only=True)
-    job_service_types = JobServiceTypeInputSerializer(many=True, write_only=True, required=False)
-    job_attachments = serializers.ListField(child=serializers.FileField(), write_only=True, required=False)
-
     id = serializers.IntegerField(read_only=True)
     status = serializers.CharField(read_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -35,86 +129,139 @@ class JobCreateSerializer(serializers.ModelSerializer):
         model = Job
         fields = [
             "id", "title", "description",
-            "start_date", "start_time",
-            "service", "address", "job_service_types", "job_attachments",
+            "service", "address", "start_at",
             "status", "total_price",
         ]
-        extra_kwargs = {"service": {"required": True, "write_only": True}}
+        extra_kwargs = {
+            "service": {"required": True, "write_only": True},
+            "address": {"required": True, "write_only": True},
+            "start_at": {"required": False, "allow_null": True},
+        }
 
-    def _make_start_at(self, start_date, start_time):
-        if not start_date or not start_time:
-            return None
-        dt = datetime.combine(start_date, start_time)
-        if timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, timezone.get_current_timezone())
-        return dt
+class JobRateSerializer(serializers.ModelSerializer):
+    job_id = serializers.PrimaryKeyRelatedField(queryset=Job.objects.all(), source="job")
+    rated_at = serializers.DateTimeField(read_only=True)
 
-    def _resolve_address(self, user, data: dict) -> Address:
-        country = Country.objects.filter(name__iexact=data["country_name"]).first()
-        if not country:
-            raise serializers.ValidationError({"address": "Country not found. Seed countries first."})
-        province = Province.objects.filter(name__iexact=data["province_name"], country=country).first()
-        if not province:
-            raise serializers.ValidationError({"address": "Province not found for the given country."})
-        city, _ = City.objects.get_or_create(name=data["city_name"], province=province)
-
-        addr = Address(
-            user=user,
-            street_number=data["street_number"],
-            street_name=data["street_name"],
-            unit_suite=data.get("unit_suite") or None,
-            city=city,
-            postal_code=data["postal_code"],
-        )
-        addr.full_clean()
-        addr.save()
-        return addr
+    class Meta:
+        model = JobRate
+        fields = ["id", "job_id", "rate", "rated_at"]
 
     def validate(self, attrs):
-        service: Service = attrs["service"]
-        st_inputs = self.initial_data.get("job_service_types") or []
-        if st_inputs:
-            st_ids = [x.get("service_type_id") for x in st_inputs]
-            svc_types = ServiceType.objects.filter(id__in=st_ids).select_related("service")
-            if len(svc_types) != len(st_ids):
-                raise serializers.ValidationError({"job_service_types": "One or more service_type_id are invalid."})
-            for st in svc_types:
-                if st.service_id != service.id:
-                    raise serializers.ValidationError({"job_service_types": "All service types must belong to the selected service."})
+        request = self.context.get("request")
+        job = attrs.get("job") or getattr(self.instance, "job", None)
+        if job is None:
+            raise serializers.ValidationError({"job_id": "Job is required."})
+        if request is None or job.user_id != request.user.id:
+            raise serializers.ValidationError({"job_id": "You can only rate your own job."})
+        if self.instance is None and JobRate.objects.filter(job=job).exists():
+            raise serializers.ValidationError({"job_id": "This job is already rated."})
+        if job.status != JobStatus.COMPLETED or not job.is_paid:
+            raise serializers.ValidationError({"job_id": "You can rate only completed and paid jobs."})
+        return attrs
+    
+class JobListSerializer(serializers.ModelSerializer):
+    owner = UserMiniSerializer(source="user", read_only=True)
+    professional = ProfessionalMiniSerializer(read_only=True)
+    address = AddressSerializer(read_only=True)
+    service = ServiceMiniSerializer(read_only=True)
+    service_types = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Job
+        fields = [
+            "id", "title", "description",
+            "status", "is_paid", "total_price", "start_at", "created_at",
+            "owner", "professional", "address", "service", "service_types",
+        ]
+
+    def get_service_types(self, obj):
+        sts = ServiceType.objects.filter(job_service_types__job=obj).only("id", "title", "price")
+        return ServiceTypeMiniSerializer(sts, many=True).data
+
+
+class JobDetailSerializer(serializers.ModelSerializer):
+    owner = UserMiniSerializer(source="user", read_only=True)
+    professional = ProfessionalMiniSerializer(read_only=True)
+    address = AddressSerializer(read_only=True)
+    service = ServiceMiniSerializer(read_only=True)
+    service_types = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Job
+        fields = [
+            "id", "title", "description",
+            "status", "is_paid", "total_price", "quantity",
+            "submit_date", "start_at", "completed_date", "created_at", "updated_at",
+            "owner", "professional", "address", "service", "service_types",
+        ]
+
+    def get_service_types(self, obj):
+        sts = ServiceType.objects.filter(job_service_types__job=obj).only("id", "title", "price")
+        return ServiceTypeMiniSerializer(sts, many=True).data
+
+class JobUnitUpdateRequestCreateSerializer(serializers.ModelSerializer):
+    job_id = serializers.PrimaryKeyRelatedField(queryset=Job.objects.all(), source="job")
+    new_unit_qty = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = JobUnitUpdateRequest
+        fields = ["id", "job_id", "new_unit_qty", "status", "created_at", "updated_at"]
+        read_only_fields = ["status", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        job: Job = attrs["job"]
+        if not hasattr(request.user, "professional_profile"):
+            raise serializers.ValidationError({"detail": "Only professionals can submit requests."})
+        professional: Professional = request.user.professional_profile
+        if job.professional_id != professional.id:
+            raise serializers.ValidationError({"job_id": "You are not assigned to this job."})
+        if job.status in [JobStatus.COMPLETED, JobStatus.CANCELLED]:
+            raise serializers.ValidationError({"job_id": "Cannot request unit update for completed or cancelled jobs."})
+        qty: Decimal = attrs["new_unit_qty"]
+        if qty <= Decimal("0"):
+            raise serializers.ValidationError({"new_unit_qty": "Must be greater than zero."})
         return attrs
 
-    @transaction.atomic
     def create(self, validated_data):
         request = self.context["request"]
-        user = request.user
+        professional = request.user.professional_profile
+        with transaction.atomic():
+            obj = JobUnitUpdateRequest.objects.create(professional=professional, **validated_data)
+        return obj
+    
+class JobUnitUpdateRequestListSerializer(serializers.ModelSerializer):
+    job_title = serializers.CharField(source="job.title", read_only=True)
+    professional_email = serializers.EmailField(source="professional.user.email", read_only=True)
 
-        start_date = validated_data.pop("start_date", None)
-        start_time = validated_data.pop("start_time", None)
-        address_payload = self.initial_data.get("address") or {}
-        st_inputs = self.initial_data.get("job_service_types") or []
-        files = self.initial_data.get("job_attachments")
+    class Meta:
+        model = JobUnitUpdateRequest
+        fields = ["id", "job", "job_title", "professional", "professional_email", "new_unit_qty", "status", "created_at", "updated_at"]
+        read_only_fields = fields
+    
+class JobOfferSerializer(serializers.ModelSerializer):
+    job_id = serializers.IntegerField(source="job.id", read_only=True)
+    job_title = serializers.CharField(source="job.title", read_only=True)
+    service_id = serializers.IntegerField(source="job.service.id", read_only=True)
+    service_title = serializers.CharField(source="job.service.title", read_only=True)
+    city = serializers.CharField(source="job.address.city.name", read_only=True)
+    province = serializers.CharField(source="job.address.city.province.code", read_only=True)
+    start_at = serializers.DateTimeField(source="job.start_at", read_only=True)
 
-        start_at = self._make_start_at(start_date, start_time)
-        address = self._resolve_address(user, address_payload)
-
-        job = Job.objects.create(
-            user=user,
-            service=validated_data["service"],
-            address=address,
-            title=validated_data["title"],
-            description=validated_data.get("description"),
-            start_at=start_at,
-            quantity=Decimal("1.00"),
-        )
-
-        if st_inputs:
-            st_ids = [x["service_type_id"] for x in st_inputs]
-            JobServiceType.objects.bulk_create(
-                [JobServiceType(job=job, service_type_id=st_id) for st_id in st_ids]
-            )
-
-        if files and isinstance(files, list):
-            for f in files:
-                JobAttachment.objects.create(job=job, attachment=f)
-
-        return job
+    class Meta:
+        model = JobOffer
+        fields = [
+            "id",
+            "status",
+            "distance_km",
+            "created_at",
+            "updated_at",
+            "accepted_at",
+            "job_id",
+            "job_title",
+            "service_id",
+            "service_title",
+            "city",
+            "province",
+            "start_at",
+        ]

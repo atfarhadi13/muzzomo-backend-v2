@@ -1,10 +1,15 @@
 from django.urls import path
 
-from .views import ( ServiceCategoryListView, ServiceListView, 
-                    ServiceTypeListView, ServiceTypeDetailView,
-                    RatingListCreateView, RatingDetailView,
-                    MyRatingListView, ServiceRatingListView
-                    )
+from .views import ( 
+    ServiceCategoryListView, 
+    ServiceListView, 
+    ServiceTypeListView, 
+    ServiceTypeDetailView,
+    RatingListCreateView, 
+    RatingDetailView,
+    MyRatingListView,
+    ServiceRatingListView
+)
 
 urlpatterns = [
     path("categories/", ServiceCategoryListView.as_view(), name="service-category-list"),
