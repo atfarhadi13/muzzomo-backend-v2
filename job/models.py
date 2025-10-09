@@ -81,6 +81,13 @@ class Job(models.Model):
         validators=[MinValueValidator(Decimal('0.00'))],
     )
 
+    paid_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+
     status = models.CharField(
         max_length=20,
         choices=JobStatus.choices,
@@ -126,15 +133,20 @@ class Job(models.Model):
 
     @property
     def paid_units(self):
-        return Decimal("1.00") if self.is_paid else Decimal("0.00")
+        if not self.service_id or self.unit_price == 0:
+            return Decimal("0.00")
+        units = (self.paid_amount / self.unit_price).quantize(Decimal("0.00"))
+        return max(Decimal("0.00"), min(units, self.quantity))
 
     @property
     def remaining_units(self):
-        return Decimal("0.00") if self.is_paid else Decimal("1.00")
+        rem = (self.quantity - self.paid_units)
+        return rem if rem > 0 else Decimal("0.00")
 
     @property
     def outstanding_amount(self):
-        return Decimal("0.00") if self.is_paid else self.total_price
+        rem = (self.total_price - (self.paid_amount or Decimal("0.00"))).quantize(Decimal("0.01"))
+        return rem if rem > 0 else Decimal("0.00")
 
     def _validate_dates(self):
         ref = self.submit_date or timezone.now()
@@ -179,8 +191,14 @@ class Job(models.Model):
                 if (old.service_id != self.service_id) or (old.quantity != self.quantity):
                     recalc = True
 
-        if recalc and self.service_id and self.quantity is not None:
-            self.total_price = (self.service.price * self.quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if self.service_id and self.quantity is not None:
+            computed_total = (self.service.price * self.quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if recalc or self.total_price != computed_total:
+                self.total_price = computed_total
+
+        paid = (self.paid_amount or Decimal("0.00")).quantize(Decimal("0.01"))
+        total = (self.total_price or Decimal("0.00")).quantize(Decimal("0.01"))
+        self.is_paid = paid >= total
 
         self.full_clean()
         super().save(*args, **kwargs)
@@ -269,9 +287,16 @@ class JobUnitUpdateRequest(models.Model):
     def accept(self):
         if self.status != JobUnitUpdateRequestStatus.PENDING:
             raise ValidationError('Only pending requests can be accepted.')
+
         job = Job.objects.select_for_update().get(pk=self.job_id)
-        job.quantity = self.new_unit_qty
+
+        new_qty = (job.quantity or Decimal("0")) + self.new_unit_qty
+        if new_qty <= Decimal("0"):
+            raise ValidationError('Resulting job quantity must be greater than zero.')
+
+        job.quantity = new_qty
         job.save(update_fields=['quantity', 'updated_at'])
+
         self.status = JobUnitUpdateRequestStatus.ACCEPTED
         self.save(update_fields=['status', 'updated_at'])
 

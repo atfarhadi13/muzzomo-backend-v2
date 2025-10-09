@@ -11,21 +11,20 @@ from job.models import Job, JobRate, JobStatus, JobUnitUpdateRequest, JobOffer, 
 
 from professional.models import Professional
 from service.models import ServiceType
+from user.models import CustomUser
 
-class UserMiniSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
-    email = serializers.EmailField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    phone_number = serializers.CharField(allow_null=True)
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["id", "email", "first_name", "last_name", "phone_number"]
 
 
-class ProfessionalMiniSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
-    is_verified = serializers.BooleanField()
-    verification_status = serializers.CharField()
-    license_number = serializers.CharField()
-    user = UserMiniSerializer(source="user")
+class ProfessionalMiniSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+
+    class Meta:
+        model = Professional
+        fields = ["id", "license_number", "is_verified", "verification_status", "user"]
 
 
 class CountrySerializer(serializers.Serializer):
@@ -48,13 +47,28 @@ class CitySerializer(serializers.Serializer):
 
 
 class AddressSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
     street_number = serializers.CharField()
     street_name = serializers.CharField()
     unit_suite = serializers.CharField(allow_null=True)
     postal_code = serializers.CharField()
-    postal_code_formatted = serializers.CharField()
-    city = CitySerializer()
+    city = serializers.CharField(source="city.name")
+    province_code = serializers.CharField(source="city.province.code")
+    province_name = serializers.CharField(source="city.province.name")
+    country_name = serializers.CharField(source="city.province.country.name")
+    country_code = serializers.CharField(source="city.province.country.code")
+
+    def to_representation(self, instance):
+        return {
+            "street_number": instance.street_number,
+            "street_name": instance.street_name,
+            "unit_suite": instance.unit_suite,
+            "postal_code": instance.postal_code_formatted,
+            "city": instance.city.name,
+            "province_code": instance.city.province.code,
+            "province_name": instance.city.province.name,
+            "country_name": instance.city.province.country.name,
+            "country_code": instance.city.province.country.code,
+        }
 
 
 class ServiceCategoryMiniSerializer(serializers.Serializer):
@@ -69,17 +83,25 @@ class UnitMiniSerializer(serializers.Serializer):
 
 
 class ServiceMiniSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
+    id = serializers.IntegerField()
     title = serializers.CharField()
-    is_trade_required = serializers.BooleanField()
     price = serializers.DecimalField(max_digits=10, decimal_places=2)
-    unit = UnitMiniSerializer(allow_null=True)
-    categories = ServiceCategoryMiniSerializer(many=True)
+    unit = serializers.CharField(source="unit.code", allow_null=True)
+    categories = serializers.ListField(child=serializers.CharField(), read_only=True)
 
-class ServiceTypeMiniSerializer(serializers.Serializer):
-    id = serializers.IntegerField(source="pk")
-    title = serializers.CharField()
-    price = serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True)
+    def to_representation(self, instance):
+        return {
+            "id": instance.id,
+            "title": instance.title,
+            "price": str(instance.price),
+            "unit": instance.unit.code if instance.unit else None,
+            "categories": list(instance.categories.values_list("title", flat=True)),
+        }
+
+class ServiceTypeMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceType
+        fields = ["id", "title", "price"]
 
 class JobAttachmentSerializer(serializers.ModelSerializer):
     file_name = serializers.SerializerMethodField()
@@ -124,18 +146,20 @@ class JobCreateSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     status = serializers.CharField(read_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
         model = Job
         fields = [
             "id", "title", "description",
             "service", "address", "start_at",
-            "status", "total_price",
+            "quantity", "status", "total_price",
         ]
         extra_kwargs = {
             "service": {"required": True, "write_only": True},
             "address": {"required": True, "write_only": True},
             "start_at": {"required": False, "allow_null": True},
+            "quantity": {"required": True, "min_value": Decimal("0.01")},
         }
 
 class JobRateSerializer(serializers.ModelSerializer):
@@ -175,9 +199,8 @@ class JobListSerializer(serializers.ModelSerializer):
         ]
 
     def get_service_types(self, obj):
-        sts = ServiceType.objects.filter(job_service_types__job=obj).only("id", "title", "price")
+        sts = [jst.service_type for jst in getattr(obj, "job_service_types").all()]
         return ServiceTypeMiniSerializer(sts, many=True).data
-
 
 class JobDetailSerializer(serializers.ModelSerializer):
     owner = UserMiniSerializer(source="user", read_only=True)
@@ -196,7 +219,7 @@ class JobDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_service_types(self, obj):
-        sts = ServiceType.objects.filter(job_service_types__job=obj).only("id", "title", "price")
+        sts = [jst.service_type for jst in getattr(obj, "job_service_types").all()]
         return ServiceTypeMiniSerializer(sts, many=True).data
 
 class JobUnitUpdateRequestCreateSerializer(serializers.ModelSerializer):

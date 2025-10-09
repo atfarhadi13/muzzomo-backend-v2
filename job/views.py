@@ -168,7 +168,6 @@ class JobCreateView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         user = request.user
-
         try:
             address_payload = data.get("address")
             if isinstance(address_payload, dict):
@@ -190,7 +189,6 @@ class JobCreateView(generics.CreateAPIView):
             serializer.is_valid(raise_exception=True)
             job = serializer.save(
                 user=user,
-                quantity=Decimal("1.00"),
                 start_at=self._make_start_at(start_date, start_time),
             )
 
@@ -209,7 +207,6 @@ class JobCreateView(generics.CreateAPIView):
                 {"job_id": job.id, "message": f"Job created successfully. Offered to {offer_count} professionals."},
                 status=status.HTTP_201_CREATED,
             )
-
         except Exception as e:
             transaction.set_rollback(True)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -520,35 +517,41 @@ class PaymentSheetView(APIView):
             return Response({"detail": "Only providers can initiate payment."}, status=status.HTTP_403_FORBIDDEN)
         try:
             job = Job.objects.get(id=job_id, user=request.user)
+
+            computed_total = job.computed_total_price
+            if job.total_price != computed_total:
+                job.total_price = computed_total
+                job.is_paid = (job.paid_amount or Decimal("0.00")) >= (job.total_price or Decimal("0.00"))
+                job.save(update_fields=['total_price','is_paid','updated_at'])
+
             remaining = job.outstanding_amount
             if remaining <= 0:
                 return Response({"detail": "No outstanding balance."}, status=status.HTTP_400_BAD_REQUEST)
+
             remaining_q = remaining.quantize(Decimal("0.01"))
-            total_price_cents = int(remaining_q * 100)
+            amount_cents = int(remaining_q * 100)
+
             customer = stripe.Customer.create(email=request.user.email or None)
             ephemeral_key = stripe.EphemeralKey.create(customer=customer['id'], stripe_version='2022-11-15')
             payment_intent = stripe.PaymentIntent.create(
-                amount=total_price_cents,
+                amount=amount_cents,
                 currency='cad',
                 customer=customer['id'],
                 automatic_payment_methods={'enabled': True},
                 metadata={'job_id': job.id},
             )
-            return Response(
-                {
-                    "paymentIntent": payment_intent.client_secret,
-                    "ephemeralKey": ephemeral_key.secret,
-                    "customer": customer['id'],
-                    "publishableKey": settings.STRIPE_PUBLIC_KEY,
-                    "payment_intent_id": payment_intent.id,
-                    "amount": str(remaining_q),
-                    "amountCents": total_price_cents,
-                    "unit_price": str(job.unit_price),
-                    "paid_units": str(job.paid_units),
-                    "remaining_units": str(job.remaining_units),
-                },
-                status=status.HTTP_200_OK,
-            )
+            return Response({
+                "paymentIntent": payment_intent.client_secret,
+                "ephemeralKey": ephemeral_key.secret,
+                "customer": customer['id'],
+                "publishableKey": settings.STRIPE_PUBLIC_KEY,
+                "payment_intent_id": payment_intent.id,
+                "amount": str(remaining_q),
+                "amountCents": amount_cents,
+                "unit_price": str(job.unit_price),
+                "paid_units": str(job.paid_units),
+                "remaining_units": str(job.remaining_units),
+            }, status=status.HTTP_200_OK)
         except Job.DoesNotExist:
             return Response({"detail": "Job not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -563,15 +566,11 @@ class PaymentSuccess(APIView):
         amount_paid = request.data.get('amount_paid')
 
         if not payment_intent_id or not job_id or amount_paid is None:
-            return Response(
-                {"error": "payment_intent_id, job_id, and amount_paid are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "payment_intent_id, job_id, and amount_paid are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
         if not request.user.is_provider:
-            return Response(
-                {"detail": "Only providers can confirm payment."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"detail": "Only providers can confirm payment."},
+                            status=status.HTTP_403_FORBIDDEN)
 
         job = get_object_or_404(Job, id=job_id, user=request.user)
 
@@ -584,34 +583,14 @@ class PaymentSuccess(APIView):
             return Response({"error": "amount_paid cannot be negative."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        expected_total = job.total_price.quantize(Decimal("0.01"))
+        current = (job.paid_amount or Decimal("0.00")).quantize(Decimal("0.01"))
+        expected = (job.total_price or Decimal("0.00")).quantize(Decimal("0.01"))
+        remaining = (expected - current)
+        applied = min(max(remaining, Decimal("0.00")), amt)
 
-        field_name = None
-        if hasattr(job, "paid_amount"):
-            field_name = "paid_amount"
-        elif hasattr(job, "collected_amount"):
-            field_name = "collected_amount"
-        elif hasattr(job, "amount_paid"):
-            field_name = "amount_paid"
-        else:
-            field_name = "total_price"
-
-        current_paid = getattr(job, field_name, Decimal("0.00")) or Decimal("0.00")
-        try:
-            current_paid = Decimal(str(current_paid)).quantize(Decimal("0.01"))
-        except Exception:
-            current_paid = Decimal("0.00")
-
-        remaining = (expected_total - current_paid).quantize(Decimal("0.01"))
-        applied = min(amt, max(remaining, Decimal("0.00")))
-        new_paid = (current_paid + applied).quantize(Decimal("0.01"))
-
-        setattr(job, field_name, new_paid)
-        job.is_paid = new_paid >= expected_total
+        job.paid_amount = (current + applied).quantize(Decimal("0.01"))
         job.stripe_session_id = str(payment_intent_id)
-
-        update_fields = [field_name, 'is_paid', 'stripe_session_id', 'updated_at']
-        job.save(update_fields=update_fields)
+        job.save(update_fields=['paid_amount', 'is_paid', 'stripe_session_id', 'updated_at'])
 
         return Response(
             {
@@ -619,14 +598,13 @@ class PaymentSuccess(APIView):
                 "payment_intent_id": str(payment_intent_id),
                 "applied_amount": str(applied),
                 "submitted_amount": str(amt),
-                "total_expected": str(expected_total),
-                "total_paid": str(new_paid),
+                "total_expected": str(expected),
+                "total_paid": str(job.paid_amount),
                 "is_fully_paid": job.is_paid,
                 "paid_units": str(job.paid_units),
                 "remaining_units": str(job.remaining_units),
                 "outstanding_amount": str(job.outstanding_amount),
                 "unit_price": str(job.unit_price),
-                "accumulator_field": field_name
             },
             status=status.HTTP_200_OK,
         )
@@ -928,3 +906,80 @@ class JobAddressRetrieveView(APIView):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
         data = JobAddressSerializer(job.address).data
         return Response(data, status=status.HTTP_200_OK)
+    
+
+# Webhook to handle Job Completion or Cancellation
+class JobCompleteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        job = get_object_or_404(Job.objects.select_for_update(), pk=pk, user=request.user)
+
+        if job.status == JobStatus.COMPLETED:
+            return Response({"detail": "Job already completed."}, status=status.HTTP_400_BAD_REQUEST)
+        if job.status == JobStatus.CANCELLED:
+            return Response({"detail": "Cancelled job cannot be completed."}, status=status.HTTP_400_BAD_REQUEST)
+        if not job.professional_id:
+            return Response({"detail": "Job has no assigned professional."}, status=status.HTTP_400_BAD_REQUEST)
+        if job.status != JobStatus.IN_PROGRESS:
+            return Response({"detail": "Only in-progress jobs can be completed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if job.outstanding_amount > Decimal("0.00"):
+            return Response(
+                {
+                    "detail": "Payment required before completion.",
+                    "outstanding_amount": str(job.outstanding_amount),
+                    "total_price": str(job.total_price),
+                    "paid_amount": str(job.paid_amount),
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        job.completed_date = timezone.now()
+        job.status = JobStatus.COMPLETED
+        if not job.is_paid:
+            job.is_paid = True
+        job.save(update_fields=["completed_date", "status", "is_paid", "updated_at"])
+
+        return Response(
+            {
+                "id": job.id,
+                "status": job.status,
+                "completed_date": job.completed_date,
+                "total_price": str(job.total_price),
+                "paid_amount": str(job.paid_amount),
+                "outstanding_amount": str(job.outstanding_amount),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class JobCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        job = get_object_or_404(Job.objects.select_for_update(), pk=pk, user=request.user)
+
+        if job.status == JobStatus.CANCELLED:
+            return Response({"detail": "Job already cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+        if job.status == JobStatus.COMPLETED:
+            return Response({"detail": "Completed job cannot be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+        if job.status == JobStatus.IN_PROGRESS:
+            return Response({"detail": "In-progress job cannot be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+        if job.professional_id:
+            return Response({"detail": "Cannot cancel a job that has an assigned professional."}, status=status.HTTP_400_BAD_REQUEST)
+        if (job.paid_amount or Decimal("0.00")) > Decimal("0.00"):
+            return Response({"detail": "Job with payments cannot be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+
+        job.status = JobStatus.CANCELLED
+        job.save(update_fields=["status", "updated_at"])
+
+        return Response(
+            {
+                "id": job.id,
+                "status": job.status,
+            },
+            status=status.HTTP_200_OK,
+        )

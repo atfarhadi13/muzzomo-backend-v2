@@ -22,7 +22,9 @@ from .views import (
     JobServiceTypeListView,
     JobAddressRetrieveView,
     JobUnitUpdateRequestListForOwnerView,
-    JobUnitUpdateRequestListForProfessionalView
+    JobUnitUpdateRequestListForProfessionalView,
+    JobCompleteView,
+    JobCancelView
 )
 
 router = DefaultRouter()
@@ -53,6 +55,9 @@ urlpatterns = [
     path("jobs/<int:pk>/attachments/", JobAttachmentListView.as_view(), name="job-attachments"),
     path("jobs/<int:pk>/service-types/", JobServiceTypeListView.as_view(), name="job-service-types"),
     path("jobs/<int:pk>/address/", JobAddressRetrieveView.as_view(), name="job-address"),
+
+    path("jobs/<int:pk>/complete/", JobCompleteView.as_view(), name="job-complete"),
+    path("jobs/<int:pk>/cancel/", JobCancelView.as_view(), name="job-cancel"),
 
     path("", include(router.urls)),
 ]
