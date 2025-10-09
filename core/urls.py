@@ -10,7 +10,8 @@ urlpatterns = [
     path('service/', include('service.urls')),
     path('address/', include('address.urls')),
     path('professional/', include('professional.urls')),
-    path('job/', include('job.urls'))
+    path('job/', include('job.urls')),
+    path('subscription/', include('subscription.urls')),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

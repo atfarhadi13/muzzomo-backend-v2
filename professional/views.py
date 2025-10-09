@@ -24,44 +24,59 @@ class ProfessionalViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return self.queryset
-        return self.queryset.filter(user=self.request.user)
+        try:
+            if self.request.user.is_staff:
+                return self.queryset
+            return self.queryset.filter(user=self.request.user)
+        except Exception:
+            return Professional.objects.none()
 
     @transaction.atomic
     def perform_create(self, serializer):
-        if Professional.objects.filter(user=self.request.user).exists():
+        try:
+            if Professional.objects.filter(user=self.request.user).exists():
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"detail": "You already have a professional profile."})
+            serializer.save(user=self.request.user)
+        except Exception as e:
             from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "You already have a professional profile."})
-        serializer.save(user=self.request.user)
+            raise ValidationError({"detail": str(e)})
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
-        obj = Professional.objects.filter(user=request.user).first()
-        if not obj:
-            return Response({"detail": "No professional profile."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(self.get_serializer(obj).data)
-    
+        try:
+            obj = Professional.objects.filter(user=request.user).first()
+            if not obj:
+                return Response({"detail": "No professional profile."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(self.get_serializer(obj).data)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class ProfessionalServiceViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalService.objects.select_related("professional__user", "service").all()
     serializer_class = ProfessionalServiceSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return self.queryset
-        return self.queryset.filter(professional__user=self.request.user)
+        try:
+            if self.request.user.is_staff:
+                return self.queryset
+            return self.queryset.filter(professional__user=self.request.user)
+        except Exception:
+            return ProfessionalService.objects.none()
 
     @transaction.atomic
     def perform_create(self, serializer):
-        pro = Professional.objects.filter(user=self.request.user).first()
-        if not pro:
-            raise ValidationError({"detail": "Create your professional profile first."})
         try:
+            pro = Professional.objects.filter(user=self.request.user).first()
+            if not pro:
+                raise ValidationError({"detail": "Create your professional profile first."})
             serializer.save(professional=pro)
         except IntegrityError:
             raise ValidationError({"detail": "Service already added for this professional."})
-        
+        except Exception as e:
+            raise ValidationError({"detail": str(e)})
+
 class ProfessionalInsuranceViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalInsurance.objects.select_related("professional__user").all()
     serializer_class = ProfessionalInsuranceSerializer
@@ -69,29 +84,37 @@ class ProfessionalInsuranceViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return self.queryset
-        return self.queryset.filter(professional__user=self.request.user)
+        try:
+            if self.request.user.is_staff:
+                return self.queryset
+            return self.queryset.filter(professional__user=self.request.user)
+        except Exception:
+            return ProfessionalInsurance.objects.none()
 
     @transaction.atomic
     def perform_create(self, serializer):
-        pro = Professional.objects.filter(user=self.request.user).first()
-        if not pro:
-            raise ValidationError({"detail": "Create your professional profile first."})
-        if hasattr(pro, "insurance"):
-            raise ValidationError({"detail": "Insurance already exists for this professional."})
         try:
+            pro = Professional.objects.filter(user=self.request.user).first()
+            if not pro:
+                raise ValidationError({"detail": "Create your professional profile first."})
+            if hasattr(pro, "insurance"):
+                raise ValidationError({"detail": "Insurance already exists for this professional."})
             serializer.save(professional=pro)
         except IntegrityError:
             raise ValidationError({"detail": "Insurance already exists."})
+        except Exception as e:
+            raise ValidationError({"detail": str(e)})
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
-        obj = ProfessionalInsurance.objects.filter(professional__user=request.user).first()
-        if not obj:
-            return Response({"detail": "No insurance record."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(self.get_serializer(obj).data)
-    
+        try:
+            obj = ProfessionalInsurance.objects.filter(professional__user=request.user).first()
+            if not obj:
+                return Response({"detail": "No insurance record."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(self.get_serializer(obj).data)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class ProfessionalTradeViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalTrade.objects.select_related("professional__user").all()
     serializer_class = ProfessionalTradeSerializer
@@ -99,61 +122,97 @@ class ProfessionalTradeViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return self.queryset
-        return self.queryset.filter(professional__user=self.request.user)
+        try:
+            if self.request.user.is_staff:
+                return self.queryset
+            return self.queryset.filter(professional__user=self.request.user)
+        except Exception:
+            return ProfessionalTrade.objects.none()
 
     @transaction.atomic
     def perform_create(self, serializer):
-        pro = Professional.objects.filter(user=self.request.user).first()
-        if not pro:
-            raise ValidationError({"detail": "Create your professional profile first."})
         try:
+            pro = Professional.objects.filter(user=self.request.user).first()
+            if not pro:
+                raise ValidationError({"detail": "Create your professional profile first."})
             serializer.save(professional=pro)
         except IntegrityError:
             raise ValidationError({"detail": "Trade license already exists or violates constraints."})
+        except Exception as e:
+            raise ValidationError({"detail": str(e)})
 
     @action(detail=False, methods=["get"], url_path="mine")
     def mine(self, request):
-        qs = self.get_queryset().filter(professional__user=request.user)
-        return Response(self.get_serializer(qs, many=True).data, status=status.HTTP_200_OK)
+        try:
+            qs = self.get_queryset().filter(professional__user=request.user)
+            return Response(self.get_serializer(qs, many=True).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class ProfessionalInventoryViewSet(viewsets.ModelViewSet):
     serializer_class = ProfessionalInventorySerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProfessionalInventory.objects.filter(professional=self.request.user.professional_profile)
+        try:
+            return ProfessionalInventory.objects.filter(professional=self.request.user.professional_profile)
+        except Exception:
+            return ProfessionalInventory.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(professional=self.request.user.professional_profile)
+        try:
+            serializer.save(professional=self.request.user.professional_profile)
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": str(e)})
 
 class ProfessionalTaskViewSet(viewsets.ModelViewSet):
     serializer_class = ProfessionalTaskSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProfessionalTask.objects.filter(professional=self.request.user.professional_profile)
+        try:
+            return ProfessionalTask.objects.filter(professional=self.request.user.professional_profile)
+        except Exception:
+            return ProfessionalTask.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(professional=self.request.user.professional_profile)
+        try:
+            serializer.save(professional=self.request.user.professional_profile)
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": str(e)})
 
 class ProfessionalRatingViewSet(viewsets.ModelViewSet):
     serializer_class = ProfessionalRatingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProfessionalRating.objects.filter(professional=self.request.user.professional_profile)
+        try:
+            return ProfessionalRating.objects.filter(professional=self.request.user.professional_profile)
+        except Exception:
+            return ProfessionalRating.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(professional=self.request.user.professional_profile)
+        try:
+            serializer.save(professional=self.request.user.professional_profile)
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": str(e)})
 
 class ProfessionalPayoutViewSet(viewsets.ModelViewSet):
     serializer_class = ProfessionalPayoutSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ProfessionalPayout.objects.filter(professional=self.request.user.professional_profile)
+        try:
+            return ProfessionalPayout.objects.filter(professional=self.request.user.professional_profile)
+        except Exception:
+            return ProfessionalPayout.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(professional=self.request.user.professional_profile)
+        try:
+            serializer.save(professional=self.request.user.professional_profile)
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": str(e)})

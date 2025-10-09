@@ -16,7 +16,10 @@ class ProfessionalSerializer(serializers.ModelSerializer):
         read_only_fields = ["user", "is_verified", "verification_status"]
 
     def create(self, validated_data):
-        return Professional.objects.create(**validated_data)
+        try:
+            return Professional.objects.create(**validated_data)
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
     
 class ProfessionalServiceSerializer(serializers.ModelSerializer):
     professional = serializers.PrimaryKeyRelatedField(read_only=True)
