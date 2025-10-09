@@ -19,10 +19,13 @@ class ServiceCategorySerializer(serializers.ModelSerializer):
         fields = ["id", "title", "description", "photo", "photo_url", "services_count", "created_at"]
 
     def get_photo_url(self, obj):
-        request = self.context.get("request")
-        if obj.photo and hasattr(obj.photo, "url"):
-            return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
-        return None
+        try:
+            request = self.context.get("request")
+            if obj.photo and hasattr(obj.photo, "url"):
+                return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
+            return None
+        except Exception:
+            return None
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -103,25 +106,31 @@ class ServiceSerializer(serializers.ModelSerializer):
         ]
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        include = False
-        ctx = self.context or {}
-        if ctx.get("include_types") is True:
-            include = True
-        else:
-            req = ctx.get("request")
-            if req:
-                val = req.query_params.get("include_types")
-                if val and val.lower() in {"1", "true", "yes"}:
-                    include = True
-        if not include:
-            self.fields.pop("types", None)
+        try:
+            super().__init__(*args, **kwargs)
+            include = False
+            ctx = self.context or {}
+            if ctx.get("include_types") is True:
+                include = True
+            else:
+                req = ctx.get("request")
+                if req:
+                    val = req.query_params.get("include_types")
+                    if val and val.lower() in {"1", "true", "yes"}:
+                        include = True
+            if not include:
+                self.fields.pop("types", None)
+        except Exception:
+            pass
 
     def get_average_rating(self, obj):
-        avg = getattr(obj, "avg_rating", None)
-        if avg is None:
-            avg = obj.average_rating
-        return round(float(avg), 2) if avg is not None else None
+        try:
+            avg = getattr(obj, "avg_rating", None)
+            if avg is None:
+                avg = obj.average_rating
+            return round(float(avg), 2) if avg is not None else None
+        except Exception:
+            return None
 
 
 class RatingSerializer(serializers.ModelSerializer):
@@ -134,33 +143,44 @@ class RatingSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "user_email", "service_title"]
 
     def validate_rating(self, value):
-        if not (1 <= int(value) <= 5):
-            raise serializers.ValidationError("Rating must be between 1 and 5.")
-        return value
+        try:
+            if not (1 <= int(value) <= 5):
+                raise serializers.ValidationError("Rating must be between 1 and 5.")
+            return value
+        except Exception:
+            raise serializers.ValidationError("Invalid rating value.")
 
     def validate(self, attrs):
-        user = self.context["request"].user
-        if self.instance:
-            if "service" in attrs and attrs["service"].pk != self.instance.service_id:
-                raise serializers.ValidationError({"service": "You cannot change the service of an existing rating."})
-            return attrs
+        try:
+            user = self.context["request"].user
+            if self.instance:
+                if "service" in attrs and attrs["service"].pk != self.instance.service_id:
+                    raise serializers.ValidationError({"service": "You cannot change the service of an existing rating."})
+                return attrs
 
-        service = attrs.get("service")
-        if not service:
-            raise serializers.ValidationError({"service": "This field is required."})
-        if Rating.objects.filter(service=service, user=user).exists():
-            raise serializers.ValidationError("You have already rated this service.")
-        return attrs
+            service = attrs.get("service")
+            if not service:
+                raise serializers.ValidationError({"service": "This field is required."})
+            if Rating.objects.filter(service=service, user=user).exists():
+                raise serializers.ValidationError("You have already rated this service.")
+            return attrs
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
 
     def create(self, validated_data):
-        user = self.context["request"].user
         try:
+            user = self.context["request"].user
             return Rating.objects.create(user=user, **validated_data)
         except IntegrityError:
             raise serializers.ValidationError("You have already rated this service.")
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
 
     def update(self, instance, validated_data):
-        instance.rating = validated_data.get("rating", instance.rating)
-        instance.review = validated_data.get("review", instance.review)
-        instance.save(update_fields=["rating", "review"])
-        return instance
+        try:
+            instance.rating = validated_data.get("rating", instance.rating)
+            instance.review = validated_data.get("review", instance.review)
+            instance.save(update_fields=["rating", "review"])
+            return instance
+        except Exception as e:
+            raise serializers.ValidationError(str(e))

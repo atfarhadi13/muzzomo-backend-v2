@@ -46,3 +46,5 @@ Content-Type: application/json
 DELETE /address/addresses/42/
 Authorization: Bearer <access>
 
+GET /address/addressed-list/
+Authorization: Bearer <access>

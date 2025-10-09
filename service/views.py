@@ -20,11 +20,14 @@ class ServiceCategoryListView(generics.ListAPIView):
     ordering = ["title"]
 
     def get_queryset(self):
-        return (
-            ServiceCategory.objects
-            .annotate(services_count=Count("services", distinct=True))
-            .order_by("title")
-        )
+        try:
+            return (
+                ServiceCategory.objects
+                .annotate(services_count=Count("services", distinct=True))
+                .order_by("title")
+            )
+        except Exception:
+            return ServiceCategory.objects.none()
 
 class ServiceListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -39,36 +42,41 @@ class ServiceListView(generics.ListAPIView):
         return v in {"1", "true", "yes"}
 
     def get_queryset(self):
-        qs = (
-            Service.objects
-            .select_related("unit")
-            .prefetch_related(
-                "categories",
-                Prefetch("photos", queryset=ServicePhoto.objects.order_by("-uploaded_at")),
-            )
-            .annotate(avg_rating=Avg("ratings__rating"))
-        )
-
-        if self._include_types():
-            qs = qs.prefetch_related(
-                Prefetch("types", queryset=ServiceType.objects.prefetch_related("photos").order_by("title"))
+        try:
+            qs = (
+                Service.objects
+                .select_related("unit")
+                .prefetch_related(
+                    "categories",
+                    Prefetch("photos", queryset=ServicePhoto.objects.order_by("-uploaded_at")),
+                )
+                .annotate(avg_rating=Avg("ratings__rating"))
             )
 
-        # Filters
-        category_id = self.request.query_params.get("category")
-        if category_id:
-            qs = qs.filter(categories__id=category_id)
+            if self._include_types():
+                qs = qs.prefetch_related(
+                    Prefetch("types", queryset=ServiceType.objects.prefetch_related("photos").order_by("title"))
+                )
 
-        unit_id = self.request.query_params.get("unit")
-        if unit_id:
-            qs = qs.filter(unit_id=unit_id)
+            category_id = self.request.query_params.get("category")
+            if category_id:
+                qs = qs.filter(categories__id=category_id)
 
-        return qs.distinct()
+            unit_id = self.request.query_params.get("unit")
+            if unit_id:
+                qs = qs.filter(unit_id=unit_id)
+
+            return qs.distinct()
+        except Exception:
+            return Service.objects.none()
 
     def get_serializer_context(self):
-        ctx = super().get_serializer_context()
-        ctx["include_types"] = self._include_types()
-        return ctx
+        try:
+            ctx = super().get_serializer_context()
+            ctx["include_types"] = self._include_types()
+            return ctx
+        except Exception:
+            return {}
 
 class ServiceTypeListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -79,12 +87,14 @@ class ServiceTypeListView(generics.ListAPIView):
     ordering = ["title"]
 
     def get_queryset(self):
-        qs = ServiceType.objects.select_related("service", "service__unit").order_by("title")
-        service_id = self.request.query_params.get("service")
-        if service_id:
-            qs = qs.filter(service_id=service_id)
-        return qs
-
+        try:
+            qs = ServiceType.objects.select_related("service", "service__unit").order_by("title")
+            service_id = self.request.query_params.get("service")
+            if service_id:
+                qs = qs.filter(service_id=service_id)
+            return qs
+        except Exception:
+            return ServiceType.objects.none()
 
 class ServiceTypeDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
@@ -106,9 +116,18 @@ class RatingListCreateView(generics.ListCreateAPIView):
             return [permissions.IsAuthenticated()]
         return super().get_permissions()
 
+    def get_queryset(self):
+        try:
+            return Rating.objects.select_related("service", "user").order_by("-created_at")
+        except Exception:
+            return Rating.objects.none()
+
     def get_serializer_context(self):
-        ctx = super().get_serializer_context()
-        return ctx
+        try:
+            ctx = super().get_serializer_context()
+            return ctx
+        except Exception:
+            return {}
 
 class RatingDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Rating.objects.select_related("service", "user")
@@ -126,7 +145,10 @@ class MyRatingListView(generics.ListAPIView):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return Rating.objects.select_related("service", "user").filter(user=self.request.user)
+        try:
+            return Rating.objects.select_related("service", "user").filter(user=self.request.user)
+        except Exception:
+            return Rating.objects.none()
 
 class ServiceRatingListView(generics.ListAPIView):
     serializer_class = RatingSerializer
@@ -137,5 +159,8 @@ class ServiceRatingListView(generics.ListAPIView):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        service_id = self.kwargs["service_id"]
-        return Rating.objects.select_related("service", "user").filter(service_id=service_id)
+        try:
+            service_id = self.kwargs["service_id"]
+            return Rating.objects.select_related("service", "user").filter(service_id=service_id)
+        except Exception:
+            return Rating.objects.none()
