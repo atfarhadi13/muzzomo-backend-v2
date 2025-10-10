@@ -1,4 +1,3 @@
-import secrets
 from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
@@ -6,15 +5,40 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.utils import timezone
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MinLengthValidator
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+
+import secrets
+import os
+from datetime import datetime
 
 phone_validator = RegexValidator(
     regex=r'^\+?\d{7,15}$',
     message='Enter a valid phone number (7-15 digits, optional leading "+").',
 )
+
+def validate_image_size(image):
+    max_size = 2 * 1024 * 1024
+    if image.size > max_size:
+        raise ValidationError(f"Profile image cannot be larger than 2MB. Current size: {image.size / (1024 * 1024):.2f} MB.")
+
+def validate_image_format(image):
+    valid_formats = ['image/png', 'image/jpeg']
+    if image.content_type not in valid_formats:
+        raise ValidationError("Profile image must be a PNG, JPG, or JPEG file.")
+
+def profile_image_upload_to(instance, filename):
+    current_date = datetime.now()
+    year_folder = current_date.year
+    month_folder = current_date.strftime('%B')
+    day_folder = current_date.day
+    base_filename = f"{instance.first_name}_{instance.last_name}_{current_date.strftime('%Y%m%d_%H%M%S')}"
+    file_extension = filename.split('.')[-1]
+    final_filename = f"{base_filename}.{file_extension}"
+    file_path = os.path.join(str(year_folder), str(month_folder), str(day_folder), final_filename)
+    return file_path
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -38,10 +62,12 @@ class CustomUserManager(BaseUserManager):
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
-    first_name = models.CharField(max_length=30, blank=True)
-    last_name = models.CharField(max_length=30, blank=True)
+    first_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
+    last_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
     phone_number = models.CharField(max_length=20, blank=True, null=True, validators=[phone_validator])
-    profile_image = models.ImageField(upload_to='provider_profiles/', null=True, blank=True)
+    profile_image = models.ImageField(upload_to=profile_image_upload_to, null=True, blank=True, 
+                    validators=[validate_image_size, validate_image_format], default='path_to_default_image')
+
     is_provider = models.BooleanField(default=False)
     is_professional = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
@@ -72,7 +98,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
-
 class OneTimeCodeQuerySet(models.QuerySet):
     def active(self):
         now = timezone.now()
@@ -91,11 +116,8 @@ class OneTimeCode(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='one_time_codes')
     purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
-
     code_hash = models.CharField(max_length=128, editable=False)
-
     new_email = models.EmailField(max_length=255, null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)

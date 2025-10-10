@@ -1,6 +1,5 @@
 from django.db import models
 from django.core.validators import RegexValidator, MinLengthValidator
-from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.db.models.functions import Lower
 
@@ -21,7 +20,6 @@ PROVINCE_CHOICES = (
     ("SK", "Saskatchewan"),
     ("YT", "Yukon"),
 )
-
 
 name_validator = RegexValidator(
     r"^[A-Za-zÀ-ÖØ-öø-ÿ0-9\s\-\.'’/]+$",
@@ -100,7 +98,6 @@ class City(models.Model):
 
 class Address(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="addresses")
-
     street_number = models.CharField(
         max_length=20,
         validators=[MinLengthValidator(1), street_number_validator],
@@ -117,14 +114,10 @@ class Address(models.Model):
         validators=[unit_validator],
         help_text="e.g., 5B, #1203 (optional)",
     )
-
     city = models.ForeignKey(City, on_delete=models.PROTECT, related_name="addresses")
-
     postal_code = models.CharField(max_length=7, validators=[postal_code_ca_validator], db_index=True)
-
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-
     date_created = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)
 
@@ -133,6 +126,7 @@ class Address(models.Model):
         indexes = [
             models.Index(fields=["user"]),
             models.Index(fields=["postal_code"]),
+            models.Index(fields=["city"]),
         ]
         constraints = [
             models.CheckConstraint(
