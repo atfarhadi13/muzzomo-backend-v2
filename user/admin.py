@@ -2,7 +2,6 @@ from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
-from django.utils.html import format_html
 
 from .models import CustomUser, OneTimeCode
 
@@ -53,7 +52,7 @@ class CustomUserAdmin(UserAdmin):
     ordering = ('email',)
 
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
+        (None, {'fields': ('email',)}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'phone_number', 'profile_image')}),
         ('User type', {'fields': ('is_provider', 'is_professional', 'is_verified')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -71,10 +70,9 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
 
-    readonly_fields = ('date_joined', 'last_login', 'password')
+    readonly_fields = ('date_joined', 'last_login')
 
     def save_model(self, request, obj, form, change):
-        # If admin provided a new password, set it properly
         new_pw = form.cleaned_data.get('new_password1')
         if new_pw:
             obj.set_password(new_pw)
@@ -83,29 +81,16 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(OneTimeCode)
 class OneTimeCodeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'purpose', 'created_at', 'expires_at', 'is_expired_display', 'is_used_display', 'new_email')
+    list_display = ('user', 'purpose', 'created_at', 'expires_at')
     list_filter = ('purpose', 'created_at', 'expires_at', 'used_at')
-    search_fields = ('user__email', 'new_email')
+    search_fields = ('user__email',)
     ordering = ('-created_at',)
-    readonly_fields = ('user', 'purpose', 'code_hash', 'new_email', 'created_at', 'expires_at', 'used_at', 'is_expired_display', 'is_used_display')
+    readonly_fields = ('user', 'purpose', 'created_at', 'expires_at', 'used_at')
 
     fieldsets = (
-        (None, {'fields': ('user', 'purpose', 'new_email')}),
-        ('Code Details', {'fields': ('code_hash',)}),
-        ('Timestamps', {'fields': ('created_at', 'expires_at', 'used_at', 'is_expired_display', 'is_used_display')}),
+        (None, {'fields': ('user', 'purpose')}),
+        ('Timestamps', {'fields': ('created_at', 'expires_at', 'used_at')}),
     )
-
-    def is_expired_display(self, obj):
-        if obj.is_expired:
-            return format_html('<span style="color: red;">Expired</span>')
-        return format_html('<span style="color: green;">Valid</span>')
-    is_expired_display.short_description = 'Status'
-
-    def is_used_display(self, obj):
-        if obj.is_used:
-            return format_html('<span style="color: orange;">Used</span>')
-        return format_html('<span style="color: blue;">Unused</span>')
-    is_used_display.short_description = 'Usage'
 
     def has_add_permission(self, request):
         return False

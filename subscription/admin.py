@@ -6,11 +6,11 @@ from .models import SubscriptionPlan, UserSubscription
 
 @admin.register(SubscriptionPlan)
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "stripe_plan_id", "price", "short_description")
+    list_display = ("name", "short_description", "price")
     list_filter = ("price",)
-    search_fields = ("name", "stripe_plan_id")
+    search_fields = ("name",)
     ordering = ("price",)
-    readonly_fields = ()
+    readonly_fields = ("stripe_plan_id",)
 
     @admin.display(description="Description")
     def short_description(self, obj):
@@ -26,17 +26,22 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
         "user_email",
         "plan",
         "active_badge",
-        "stripe_subscription_id",
+        "masked_stripe_subscription_id",
         "start_date",
         "end_date",
         "trial_end",
     )
     list_filter = ("active", "plan", "start_date", "end_date", "trial_end")
-    search_fields = ("user__email", "stripe_subscription_id")
+    search_fields = ("user__email",)
     ordering = ("-start_date",)
     list_select_related = ("user", "plan")
     autocomplete_fields = ("user", "plan")
-    readonly_fields = ()
+    readonly_fields = (
+        "stripe_subscription_id",
+        "start_date",
+        "end_date",
+        "trial_end",
+    )
 
     @admin.display(description="User", ordering="user__email")
     def user_email(self, obj):
@@ -51,3 +56,9 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
             color,
             label,
         )
+
+    @admin.display(description="Stripe Subscription ID")
+    def masked_stripe_subscription_id(self, obj):
+        if obj.stripe_subscription_id:
+            return "****" + obj.stripe_subscription_id[-4:]
+        return "-"
