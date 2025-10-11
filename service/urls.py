@@ -8,7 +8,9 @@ from .views import (
     RatingListCreateView, 
     RatingDetailView,
     MyRatingListView,
-    ServiceRatingListView
+    ServiceRatingListView,
+    UnitListView,
+    UnitDetailView
 )
 
 urlpatterns = [
@@ -22,4 +24,7 @@ urlpatterns = [
     path("ratings/<int:pk>/", RatingDetailView.as_view(), name="rating-detail"),
     path("ratings/mine/", MyRatingListView.as_view(), name="rating-mine"),
     path("services/<int:service_id>/ratings/", ServiceRatingListView.as_view(), name="service-rating-list"),
+
+    path('units/', UnitListView.as_view(), name='unit-list'),
+    path('units/<int:pk>/', UnitDetailView.as_view(), name='unit-detail'),
 ]

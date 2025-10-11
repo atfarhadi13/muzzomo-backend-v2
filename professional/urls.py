@@ -8,6 +8,8 @@ from .views import ( ProfessionalViewSet, ProfessionalServiceViewSet,
                     ProfessionalRatingViewSet, ProfessionalPayoutViewSet
                     )
 
+from .professional_strip_views.views import CreateStripeConnectAccount, StripeConnectCallback
+
 router = DefaultRouter()
 router.register("professionals", ProfessionalViewSet, basename="professional")
 router.register("professional-services", ProfessionalServiceViewSet, basename="professional-service")
@@ -19,6 +21,9 @@ router.register("professional-ratings", ProfessionalRatingViewSet, basename="pro
 router.register("professional-payouts", ProfessionalPayoutViewSet, basename="professional-payout")
 
 urlpatterns = [
+    path("stripe/connect/", CreateStripeConnectAccount.as_view(), name="stripe-connect"),
+    path("stripe/callback/", StripeConnectCallback.as_view(), name="stripe-callback"),
+    
     path("api/", include(router.urls)),
 ]
 

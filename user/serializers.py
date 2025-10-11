@@ -184,6 +184,20 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             return user
         except Exception as e:
             raise serializers.ValidationError(str(e))
+        
+class PasswordResetResendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        try:
+            email = self.validated_data["email"].lower()
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                return
+            obj, code, ttl_min = issue_otp(user=user, purpose=OneTimeCode.PURPOSE_RESET)
+            send_otp_email(to_email=user.email, code=code, ttl_minutes=ttl_min, purpose="reset")
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = 'email'
@@ -291,6 +305,20 @@ class EmailUpdateConfirmSerializer(serializers.Serializer):
                     code_obj.used_at = timezone.now()
                     code_obj.save(update_fields=["used_at"])
             return user
+        except Exception as e:
+            raise serializers.ValidationError(str(e))
+        
+class EmailUpdateResendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def save(self, **kwargs):
+        try:
+            email = self.validated_data["email"].lower()
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                return
+            obj, code, ttl_min = issue_otp(user=user, purpose=OneTimeCode.PURPOSE_EMAIL)
+            send_otp_email(to_email=user.email, code=code, ttl_minutes=ttl_min, purpose="email_update")
         except Exception as e:
             raise serializers.ValidationError(str(e))
 

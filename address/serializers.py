@@ -263,3 +263,22 @@ class AddressReadSerializer(serializers.ModelSerializer):
     def get_country(self, obj):
         c = obj.city.province.country
         return {"id": c.id, "name": c.name, "code": c.code}
+
+class CitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = City
+        fields = ['id', 'name']
+
+class ProvinceSerializer(serializers.ModelSerializer):
+    cities = CitySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Province
+        fields = ['id', 'name', 'code', 'cities']
+
+class CountrySerializer(serializers.ModelSerializer):
+    provinces = ProvinceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'code', 'provinces']

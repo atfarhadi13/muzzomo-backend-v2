@@ -771,15 +771,12 @@ class JobRateViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Only show ratings for the current user's jobs
         return JobRate.objects.select_related("job").filter(job__user=self.request.user)
 
     def perform_create(self, serializer):
-        # Serializer already validates ownership & completion/paid rules
         serializer.save()
 
     def perform_update(self, serializer):
-        # Keep same validations on update
         serializer.save()
 
 
@@ -1231,3 +1228,5 @@ class JobCancelView(APIView):
             return Response({"detail": "Database error.", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"id": job.id, "status": job.status}, status=status.HTTP_200_OK)
+    
+

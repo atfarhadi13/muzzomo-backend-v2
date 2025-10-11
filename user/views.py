@@ -3,11 +3,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
-
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import ( EmailTokenObtainPairSerializer, RegisterSerializer, VerifyEmailOTPSerializer, 
+from .serializers import ( EmailTokenObtainPairSerializer, EmailUpdateResendOTPSerializer, PasswordResetResendOTPSerializer, RegisterSerializer, VerifyEmailOTPSerializer, 
                           PasswordResetRequestSerializer, PasswordResetConfirmSerializer, 
                           EmailUpdateRequestSerializer, EmailUpdateConfirmSerializer, ProfileImageUpdateSerializer, 
                           ProfileBasicUpdateSerializer )
@@ -95,6 +94,18 @@ class PasswordResetConfirmView(APIView):
             return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class PasswordResetResendOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = PasswordResetResendOTPSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({"detail": "A new password reset OTP code has been sent to your email."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
@@ -141,6 +152,18 @@ class EmailUpdateConfirmView(APIView):
                 {"detail": "Email updated successfully.", "email": user.email},
                 status=status.HTTP_200_OK,
             )
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class EmailUpdateResendOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = EmailUpdateResendOTPSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response({"detail": "A new OTP code has been sent to your email for email update."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

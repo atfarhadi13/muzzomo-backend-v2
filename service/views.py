@@ -1,12 +1,17 @@
 from django.db.models import Count, Prefetch, Avg
-from rest_framework import generics, permissions, filters
 
-from .models import ServiceCategory, Service, ServiceType, ServicePhoto, Rating
+from rest_framework import generics, permissions, filters, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
+
+from .models import ServiceCategory, Service, ServiceType, ServicePhoto, Rating, Unit
 from .serializers import (
     ServiceCategorySerializer,
     ServiceSerializer,
     ServiceTypeWithServiceSerializer,
     RatingSerializer,
+    UnitSerializer,
 )
 
 from .permissions import IsOwnerOrReadOnly
@@ -164,3 +169,18 @@ class ServiceRatingListView(generics.ListAPIView):
             return Rating.objects.select_related("service", "user").filter(service_id=service_id)
         except Exception:
             return Rating.objects.none()
+
+class UnitListView(APIView):
+    def get(self, request):
+        units = Unit.objects.all()
+        serializer = UnitSerializer(units, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class UnitDetailView(APIView):
+    def get(self, request, pk):
+        try:
+            unit = Unit.objects.get(pk=pk)
+            serializer = UnitSerializer(unit)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Unit.DoesNotExist:
+            raise NotFound(detail="Unit not found")

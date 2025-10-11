@@ -20,7 +20,7 @@ from .permissions import IsOwnerOrAdmin
 class ProfessionalViewSet(viewsets.ModelViewSet):
     queryset = Professional.objects.select_related("user").all()
     serializer_class = ProfessionalSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
@@ -55,7 +55,7 @@ class ProfessionalViewSet(viewsets.ModelViewSet):
 class ProfessionalServiceViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalService.objects.select_related("professional__user", "service").all()
     serializer_class = ProfessionalServiceSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         try:
@@ -80,7 +80,7 @@ class ProfessionalServiceViewSet(viewsets.ModelViewSet):
 class ProfessionalInsuranceViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalInsurance.objects.select_related("professional__user").all()
     serializer_class = ProfessionalInsuranceSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
@@ -118,7 +118,7 @@ class ProfessionalInsuranceViewSet(viewsets.ModelViewSet):
 class ProfessionalTradeViewSet(viewsets.ModelViewSet):
     queryset = ProfessionalTrade.objects.select_related("professional__user").all()
     serializer_class = ProfessionalTradeSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
