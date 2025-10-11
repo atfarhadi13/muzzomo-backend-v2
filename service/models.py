@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -6,26 +7,57 @@ from django.db import models
 from django.db.models import Q, Avg
 from django.db.models.functions import Lower
 
+def validate_image_size(image):
+    max_size = 5 * 1024 * 1024
+    if image.size > max_size:
+        raise ValidationError(f"Image size cannot exceed 5MB. Current size: {image.size / (1024 * 1024):.2f} MB.")
+
+def validate_image_format(image):
+    valid_formats = ['image/png', 'image/jpeg']
+    if image.content_type not in valid_formats:
+        raise ValidationError("Image must be a PNG, JPG, or JPEG file.")
+
+def service_category_upload_to(instance, filename):
+    category_name = instance.title.lower().replace(' ', '_')
+    file_extension = filename.split('.')[-1]
+    return f"service_category/{category_name}.{file_extension}"
+
+def service_image_upload_to(instance, filename):
+    service_name = instance.title.lower().replace(' ', '_')
+    file_extension = filename.split('.')[-1]
+    return f"service/{service_name}.{file_extension}"
+
+def service_type_image_upload_to(instance, filename):
+    service_type_name = instance.title.lower().replace(' ', '_')
+    file_extension = filename.split('.')[-1]
+    return f"service_type/{service_type_name}.{file_extension}"
+
+def delete_old_image(instance, field_name):
+    try:
+        if getattr(instance, field_name):
+            instance_field = getattr(instance, field_name)
+            if os.path.isfile(instance_field.path):
+                os.remove(instance_field.path)
+    except Exception as e:
+        print(f"Error deleting old image: {e}")
 
 class ServiceCategory(models.Model):
     title = models.CharField(max_length=50, unique=True)
-    photo = models.ImageField(upload_to='service_category/', blank=True, null=True)
+    photo = models.ImageField(upload_to=service_category_upload_to, blank=True, null=True, validators=[validate_image_size, validate_image_format])
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "Service Categories"
         ordering = ['title']
-        constraints = [
-            models.UniqueConstraint(Lower('title'), name='uniq_servicecategory_title_ci'),
-        ]
-        indexes = [
-            models.Index(Lower('title'), name='idx_servicecategory_title_ci'),
-        ]
 
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            delete_old_image(self, 'photo')
+        super().save(*args, **kwargs)
 
 class Unit(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -53,22 +85,22 @@ class Unit(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.code})" if self.code else self.name
-
+        return f"{self.name} ({self.code})"
 
 class Service(models.Model):
     title = models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, null=True)
-    categories = models.ManyToManyField(ServiceCategory, related_name='services', blank=True)
-    is_trade_required = models.BooleanField(default=False)
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('10000.00'))]
     )
-    unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, blank=True, null=True, related_name='services')
+
+    is_trade_required = models.BooleanField(default=False)
+    categories = models.ManyToManyField(ServiceCategory, related_name='services', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, blank=True, null=True, related_name='services')
 
     class Meta:
         ordering = ['title']
@@ -87,7 +119,6 @@ class Service(models.Model):
     def average_rating(self):
         result = self.ratings.aggregate(avg_rating=Avg('rating'))
         return round(result['avg_rating'], 2) if result['avg_rating'] is not None else None
-
 
 class ServiceType(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='types')
@@ -119,7 +150,7 @@ class ServiceType(models.Model):
 
 class ServicePhoto(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='photos')
-    photo = models.ImageField(upload_to='service_photos/')
+    photo = models.ImageField(upload_to=service_image_upload_to)
     caption = models.CharField(max_length=255, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -136,10 +167,9 @@ class ServicePhoto(models.Model):
         if name:
             storage.delete(name)
 
-
 class ServiceTypePhoto(models.Model):
     service_type = models.ForeignKey(ServiceType, on_delete=models.CASCADE, related_name='photos')
-    photo = models.ImageField(upload_to='service_type_photos/')
+    photo = models.ImageField(upload_to=service_type_image_upload_to)
     caption = models.CharField(max_length=255, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -147,7 +177,7 @@ class ServiceTypePhoto(models.Model):
         ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"Photo for {self.service_type}"
+        return f"Photo for {self.service_type.title}"
 
     def delete(self, *args, **kwargs):
         storage = self.photo.storage
@@ -155,7 +185,6 @@ class ServiceTypePhoto(models.Model):
         super().delete(*args, **kwargs)
         if name:
             storage.delete(name)
-
 
 class Rating(models.Model):
     service = models.ForeignKey(Service, related_name='ratings', on_delete=models.CASCADE)

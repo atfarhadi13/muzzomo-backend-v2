@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
@@ -6,7 +7,17 @@ from django.db import models, transaction
 from django.db.models import Q, Avg
 from django.db.models.functions import Lower
 from django.utils import timezone
+
 from service.models import Service
+
+def validate_file_size(file, max_size=5 * 1024 * 1024):
+    if file.size > max_size:
+        raise ValidationError(f"File size cannot exceed {max_size / (1024 * 1024)}MB. Current size: {file.size / (1024 * 1024):.2f} MB.")
+
+def validate_file_format(file):
+    valid_formats = ['application/pdf', 'image/jpeg', 'image/png']
+    if file.content_type not in valid_formats:
+        raise ValidationError("File must be a PDF, JPG, JPEG, or PNG.")
 
 phone_validator = RegexValidator(r'^\+?\d{7,15}$', 'Enter a valid phone number (7–15 digits, optional leading "+").')
 
@@ -32,7 +43,7 @@ class Professional(models.Model):
         choices=IssuedId.choices,
         default=IssuedId.DRIVER_LICENSE
     )
-    certification = models.FileField(upload_to='professional_certification/', blank=True, null=True)
+    certification = models.FileField(upload_to='professional_certification/', blank=True, null=True, validators=[validate_file_size, validate_file_format])
     is_verified = models.BooleanField(default=False)
     verification_status = models.CharField(
         max_length=20,
@@ -112,7 +123,7 @@ class ProfessionalInsurance(models.Model):
     professional = models.OneToOneField(Professional, on_delete=models.CASCADE, related_name='insurance')
     insurance_provider_name = models.CharField(max_length=255)
     insurance_policy_number = models.CharField(max_length=255, unique=True)
-    insurance_file = models.FileField(upload_to='insurance_files/', null=True, blank=True)
+    insurance_file = models.FileField(upload_to='insurance_files/', null=True, blank=True, validators=[validate_file_size, validate_file_format])
     insurance_expiry_date = models.DateField()
 
     class Meta:
@@ -136,10 +147,11 @@ class ProfessionalInsurance(models.Model):
         if storage and name:
             storage.delete(name)
 
+
 class ProfessionalTrade(models.Model):
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='trades')
     trade_license_number = models.CharField(max_length=255, unique=True)
-    trade_license_file = models.FileField(upload_to='trade_license/', null=True, blank=True)
+    trade_license_file = models.FileField(upload_to='trade_license/', null=True, blank=True, validators=[validate_file_size, validate_file_format])
     trade_license_expiry_date = models.DateField()
 
     class Meta:
@@ -163,6 +175,7 @@ class ProfessionalTrade(models.Model):
         if storage and name:
             storage.delete(name)
 
+
 class ProfessionalInventory(models.Model):
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='inventories')
     item_name = models.CharField(max_length=255)
@@ -185,10 +198,12 @@ class ProfessionalInventory(models.Model):
         unit_display = f" {self.unit}" if self.unit else ""
         return f"{self.item_name} ({self.quantity}{unit_display}) - {self.professional.user.email}"
 
+
 class ProfessionalTaskStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
     IN_PROGRESS = 'in_progress', 'In Progress'
     COMPLETED = 'completed', 'Completed'
+
 
 class ProfessionalTask(models.Model):
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='tasks')

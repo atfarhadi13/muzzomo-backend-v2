@@ -1,5 +1,4 @@
 from decimal import Decimal, ROUND_HALF_UP
-
 from django.db import models, transaction, IntegrityError
 from django.db.models import Q
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -7,9 +6,18 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from service.models import Service, ServiceType
 from professional.models import Professional, ProfessionalService
+from service.models import Service, ServiceType
 from address.models import Address
+
+def validate_file_size(file, max_size=5 * 1024 * 1024):
+    if file.size > max_size:
+        raise ValidationError(f"File size cannot exceed {max_size / (1024 * 1024)}MB. Current size: {file.size / (1024 * 1024):.2f} MB.")
+
+def validate_file_format(file):
+    valid_formats = ['application/pdf', 'image/jpeg', 'image/png']
+    if file.content_type not in valid_formats:
+        raise ValidationError("File must be a PDF, JPG, JPEG, or PNG.")
 
 class JobStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
@@ -207,9 +215,10 @@ class Job(models.Model):
     def computed_total_price(self) -> Decimal:
         return (self.service.price * self.quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+
 class JobAttachment(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='attachments')
-    attachment = models.FileField(upload_to='job_attachments/')
+    attachment = models.FileField(upload_to='job_attachments/', validators=[validate_file_size, validate_file_format])
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -217,6 +226,7 @@ class JobAttachment(models.Model):
 
     def __str__(self):
         return f"Attachment for {self.job.title}"
+
 
 class JobServiceType(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='job_service_types')
@@ -300,6 +310,7 @@ class JobUnitUpdateRequest(models.Model):
         self.status = JobUnitUpdateRequestStatus.ACCEPTED
         self.save(update_fields=['status', 'updated_at'])
 
+
 class JobOffer(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='offers')
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='job_offers')
@@ -364,6 +375,7 @@ class JobOffer(models.Model):
             self.save(update_fields=['status', 'accepted_at', 'updated_at'])
         except IntegrityError:
             raise ValidationError('Another offer was accepted for this job just now. Please refresh.')
+
 
 class JobRate(models.Model):
     job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='rate')

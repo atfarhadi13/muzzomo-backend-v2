@@ -26,6 +26,7 @@ if [[ "$1" == "--reset" ]]; then
     python manage.py makemigrations user
     python manage.py makemigrations professional
     python manage.py makemigrations job
+    python manage.py makemigrations subscription
 
     python manage.py migrate
 
