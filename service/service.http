@@ -1,107 +1,83 @@
-GET http://127.0.0.1:8000/service/categories/?search=plumb&ordering=-created_at
+@base = http://127.0.0.1:8000/service
+@token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
+@service_id = 12
+@service_type_id = 5
+@rating_id = 45
+@unit_id = 2
+@category_id = 5
 
-[
-  {
-    "id": 3,
-    "title": "Plumbing",
-    "description": "Pipes, leaks, fixtures",
-    "photo": "/media/service_category/plumbing.png",
-    "photo_url": "http://127.0.0.1:8000/media/service_category/plumbing.png",
-    "services_count": 12,
-    "created_at": "2025-08-24T10:15:30.123Z"
-  }
-]
+###
+# Service Categories — List (search/order supported)
+GET {{base}}/categories/?search=plumb&ordering=-created_at
 
-GET http://127.0.0.1:8000/service/services/
-GET http://127.0.0.1:8000/service/services/?search=plumb&ordering=-avg_rating
-GET http://127.0.0.1:8000/service/services/?category=5&ordering=price
-GET http://127.0.0.1:8000/service/services/?unit=2
+###
+# Services — List (filters: search, ordering, category, unit; include_types=1|true|yes)
+GET {{base}}/services/
+# Examples:
+# GET {{base}}/services/?search=plumb&ordering=-avg_rating
+# GET {{base}}/services/?category={{category_id}}&ordering=price
+# GET {{base}}/services/?unit={{unit_id}}&include_types=1
 
-[
-  {
-    "id": 12,
-    "title": "Plumbing - Pipe Fix",
-    "description": "Fix leaks and pipes.",
-    "is_trade_required": false,
-    "price": "79.99",
-    "unit": { "id": 2, "name": "Hour", "code": "HR" },
-    "categories": [{ "id": 3, "title": "Plumbing" }],
-    "photos": [
-      {
-        "id": 101,
-        "caption": "Before",
-        "uploaded_at": "2025-08-25T09:49:10.120Z",
-        "photo": "/media/service_photos/x.png",
-        "photo_url": "http://127.0.0.1:8000/media/service_photos/x.png"
-      }
-    ],
-    "types": [
-      {
-        "id": 7,
-        "title": "Emergency call",
-        "description": null,
-        "price": "120.00",
-        "created_at": "2025-08-20T10:00:00Z",
-        "photos": [
-          {
-            "id": 301,
-            "caption": "Example",
-            "uploaded_at": "2025-08-22T08:30:00Z",
-            "photo": "/media/service_type_photos/y.jpg",
-            "photo_url": "http://127.0.0.1:8000/media/service_type_photos/y.jpg"
-          }
-        ]
-      }
-    ],
-    "average_rating": 4.5,
-    "created_at": "2025-08-10T12:00:00Z"
-  }
-]
+###
+# Service Types — List (filter by service)
+GET {{base}}/service-types/
+# Examples:
+# GET {{base}}/service-types/?service={{service_id}}
+# GET {{base}}/service-types/?search=emergency&ordering=-price
 
+###
+# Service Type — Detail
+GET {{base}}/service-types/{{service_type_id}}/
 
-GET http://127.0.0.1:8000/service/service-types/
-GET http://127.0.0.1:8000/service/service-types/?service=12
-GET http://127.0.0.1:8000/service/service-types/?search=emergency&ordering=-price
-[
-  {
-    "id": 5,
-    "title": "Emergency Call",
-    "description": null,
-    "price": "120.00",
-    "created_at": "2025-08-22T09:15:10Z",
-    "service": {
-      "id": 12,
-      "title": "Plumbing",
-      "price": "79.99",
-      "unit": { "id": 2, "name": "Hour", "code": "HR" }
-    }
-  }
-]
+###
+# Ratings — List (public; search/order supported)
+GET {{base}}/ratings/?search=pipe&ordering=-rating
 
-
-POST /service/ratings/
-Authorization: Bearer <access>
+###
+# Ratings — Create (auth required)
+POST {{base}}/ratings/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "service": 12, "rating": 5, "review": "Excellent!" }
+{
+  "service": {{service_id}},
+  "rating": 5,
+  "review": "Excellent!"
+}
 
+###
+# Rating — Retrieve
+GET {{base}}/ratings/{{rating_id}}/
 
-PATCH /service/ratings/45/
-Authorization: Bearer <access>
+###
+# Rating — Update (auth + owner)
+PATCH {{base}}/ratings/{{rating_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "rating": 4, "review": "Good, but price high." }
+{
+  "rating": 4,
+  "review": "Good, but price high."
+}
 
+###
+# Rating — Delete (auth + owner)
+DELETE {{base}}/ratings/{{rating_id}}/
+Authorization: Bearer {{token}}
 
-DELETE /service/ratings/45/
-Authorization: Bearer <access>
+###
+# My Ratings — List (auth)
+GET {{base}}/ratings/mine/
+Authorization: Bearer {{token}}
 
+###
+# Service Ratings — List (public)
+GET {{base}}/services/{{service_id}}/ratings/?ordering=-created_at
 
-GET /service/ratings/?search=pipe&ordering=-rating
+###
+# Units — List (public)
+GET {{base}}/units/
 
-
-GET /service/ratings/mine/
-Authorization: Bearer <access>
-
-
-GET /service/services/12/ratings/?ordering=-created_at
+###
+# Unit — Detail (public)
+GET {{base}}/units/{{unit_id}}/

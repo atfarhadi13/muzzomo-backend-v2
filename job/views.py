@@ -1219,30 +1219,7 @@ class JobCompleteView(APIView):
                 setattr(payout, k, v)
             payout.save()
 
-        return Response(
-            {
-                "id": job.id,
-                "status": job.status,
-                "completed_date": job.completed_date,
-                "total_price": str(job.total_price),
-                "paid_amount": str(job.paid_amount),
-                "outstanding_amount": str(job.outstanding_amount),
-                "payout": {
-                    "payout_id": payout.id,
-                    "gross_amount": str(payout.gross_amount),
-                    "fee_percent_applied": str(payout.fee_percent_applied),
-                    "fee_amount": str(payout.fee_amount),
-                    "net_amount": str(payout.net_amount),
-                    "status": payout.status,
-                    "dest_institution_name": payout.dest_institution_name,
-                    "dest_institution_number": payout.dest_institution_number,
-                    "dest_transit_number": payout.dest_transit_number,
-                    "dest_account_last4": payout.dest_account_last4,
-                    "dest_account_holder_name": payout.dest_account_holder_name,
-                },
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response({"message": "Job completed successfully."}, status=status.HTTP_200_OK)
 
 
 class JobCancelView(APIView):

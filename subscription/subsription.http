@@ -1,0 +1,68 @@
+### =========================
+### Subscriptions API (.http)
+### =========================
+
+@base = http://127.0.0.1:8000/subscriptions
+@token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
+@plan_id = 1
+@new_plan_id = 2
+@stripe_subscription_id = sub_123_replace_me
+
+### 1) List all plans (public)
+GET {{base}}/plans/
+
+### 2) Start subscribe flow (create Stripe Subscription + PaymentSheet creds)
+### Body: plan_id (the DB id of SubscriptionPlan)
+POST {{base}}/subscribe/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "plan_id": {{plan_id}}
+}
+
+### Expected 200 Response example:
+### {
+###   "paymentIntentClientSecret": "pi_client_secret_xxx",
+###   "ephemeralKeySecret": "ek_test_xxx",
+###   "customer": "cus_abc123",
+###   "publishableKey": "pk_live_or_test_xxx",
+###   "stripe_subscription_id": "sub_12345",
+###   "plan": { "id": 1, "name": "Pro Plan", "price": "19.99", "stripe_price_id": "price_abc" }
+### }
+
+### 3) Confirm subscription success (AFTER mobile PaymentSheet confirms payment)
+### Body: stripe_subscription_id (from step 2 response)
+POST {{base}}/subscribe/success/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "stripe_subscription_id": "{{stripe_subscription_id}}"
+}
+
+### 4) Change plan (requires active subscription)
+### Body: plan_id (DB id of the new SubscriptionPlan)
+POST {{base}}/change-plan/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "plan_id": {{new_plan_id}}
+}
+
+### 5) Cancel at period end (keeps sub active until end_date)
+POST {{base}}/cancel/at-period-end/
+Authorization: Bearer {{token}}
+
+### 6) Cancel immediately (ends sub right now)
+POST {{base}}/cancel/now/
+Authorization: Bearer {{token}}
+
+### 7) Get my current subscription (authenticated user)
+GET {{base}}/me/
+Authorization: Bearer {{token}}
+
+### 8) Admin — list all user subscriptions (admin only)
+GET {{base}}/all/
+Authorization: Bearer {{token}}

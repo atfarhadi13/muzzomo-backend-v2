@@ -1,106 +1,205 @@
-POST http://localhost:8000/professional/api/professionals/
+@base = http://localhost:8000
+# If your app is mounted at /professional/, keep prefix; else set to just /api
+@prefix = /professional/api
 
-Authorization: Bearer <your-JWT-access-token>
-Content-Type: multipart/form-data
+@token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
+@pro_id = 12
+@service_id = 1
+@trade_id = 1
+@inventory_id = 1
+@task_id = 1
+@rating_id = 1
+@payout_id = 1
+@bankinfo_id = 1
+
+###
+# Professional — Create
+POST {{base}}{{prefix}}/professionals/
+Authorization: Bearer {{token}}
+Content-Type: application/json
 
 {
   "license_number": "LIC-12345",
-  "government_issued_id": "driver_license"
+  "government_issued_id": "driver_license",
+  "certification": "Red Seal"
 }
 
-GET /api/professionals/me
-Authorization: Bearer <token>
+###
+# Professional — Me (singleton)
+GET {{base}}{{prefix}}/professionals/me/
+Authorization: Bearer {{token}}
 
-PATCH /api/professionals/12/
-Authorization: Bearer <token>
+###
+# Professional — Retrieve
+GET {{base}}{{prefix}}/professionals/{{pro_id}}/
+Authorization: Bearer {{token}}
+
+###
+# Professional — Update (PATCH)
+PATCH {{base}}{{prefix}}/professionals/{{pro_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "license_number": "LIC-99999" }
 
+###
+# Professional — Delete
+DELETE {{base}}{{prefix}}/professionals/{{pro_id}}/
+Authorization: Bearer {{token}}
 
-DELETE /api/professionals/12/
-Authorization: Bearer <token>
+########################################################
+# Professional Services
+########################################################
 
-POST http://localhost:8000/professional/api/professional-services/
-
-{ 
-    "service": 1 
-}
-
-GET /api/professional-services/
-
-GET /api/professional-services/{id}/
-
-PATCH /api/professional-services/{id}/
-{ 
-    "service": 1 
-}
-
-DELETE /api/professional-services/{id}/
-
-
-POST http://localhost:8000/api/professional-insurance/
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
-
-insurance_provider_name = "ABC Insurance"
-insurance_policy_number = "POL-123456"
-insurance_expiry_date = 2030-12-31
-insurance_file = <file>
-
-GET http://localhost:8000/api/professional-insurance/me
-Authorization: Bearer <token>
-
-GET http://localhost:8000/api/professional-insurance/
-Authorization: Bearer <token>
-
-GET http://localhost:8000/api/professional-insurance/{id}/
-Authorization: Bearer <token>
-
-PATCH http://localhost:8000/api/professional-insurance/{id}/
-Authorization: Bearer <token>
+###
+# Create Professional Service (attach a Service to me)
+POST {{base}}{{prefix}}/professional-services/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{
-  "insurance_provider_name": "XYZ Insurance"
-}
+{ "service": {{service_id}} }
 
-DELETE http://localhost:8000/api/professional-insurance/{id}/
-Authorization: Bearer <token>
+###
+# List My Professional Services
+GET {{base}}{{prefix}}/professional-services/
+Authorization: Bearer {{token}}
 
+###
+# Retrieve Professional Service
+GET {{base}}{{prefix}}/professional-services/{{service_id}}/
+Authorization: Bearer {{token}}
 
-# Professional Trade
-POST http://localhost:8000/api/professional-trades/
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
-
-trade_license_number = TL-2025-0001
-trade_license_expiry_date = 2030-12-31
-trade_license_file = <file>
-
-GET http://localhost:8000/api/professional-trades/mine
-Authorization: Bearer <token>
-
-GET http://localhost:8000/api/professional-trades/
-Authorization: Bearer <token>
-
-GET http://localhost:8000/api/professional-trades/{id}/
-Authorization: Bearer <token>
-
-PATCH http://localhost:8000/api/professional-trades/{id}/
-Authorization: Bearer <token>
+###
+# Update Professional Service
+PATCH {{base}}{{prefix}}/professional-services/{{service_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{
-  "trade_license_number": "TL-2025-0099"
-}
+{ "service": {{service_id}} }
 
-DELETE http://localhost:8000/api/professional-trades/{id}/
-Authorization: Bearer <token>
+###
+# Delete Professional Service
+DELETE {{base}}{{prefix}}/professional-services/{{service_id}}/
+Authorization: Bearer {{token}}
 
-# Professional Inventory
-POST http://localhost:8000/api/professional-inventories/
-Authorization: Bearer <token>
+########################################################
+# Professional Insurance (singleton per professional)
+########################################################
+
+###
+# Create / Upload Insurance (multipart)
+POST {{base}}{{prefix}}/professional-insurance/
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=BOUNDARY
+
+--BOUNDARY
+Content-Disposition: form-data; name="insurance_provider_name"
+
+ABC Insurance
+--BOUNDARY
+Content-Disposition: form-data; name="insurance_policy_number"
+
+POL-123456
+--BOUNDARY
+Content-Disposition: form-data; name="insurance_expiry_date"
+
+2030-12-31
+--BOUNDARY
+Content-Disposition: form-data; name="insurance_file"; filename="policy.pdf"
+Content-Type: application/pdf
+
+< ./policy.pdf
+--BOUNDARY--
+
+###
+# Get My Insurance
+GET {{base}}{{prefix}}/professional-insurance/me/
+Authorization: Bearer {{token}}
+
+###
+# List Insurance (me; staff sees all)
+GET {{base}}{{prefix}}/professional-insurance/
+Authorization: Bearer {{token}}
+
+###
+# Retrieve Insurance
+GET {{base}}{{prefix}}/professional-insurance/1/
+Authorization: Bearer {{token}}
+
+###
+# Update Insurance
+PATCH {{base}}{{prefix}}/professional-insurance/1/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "insurance_provider_name": "XYZ Insurance" }
+
+###
+# Delete Insurance
+DELETE {{base}}{{prefix}}/professional-insurance/1/
+Authorization: Bearer {{token}}
+
+########################################################
+# Professional Trades (many)
+########################################################
+
+###
+# Create Trade (multipart)
+POST {{base}}{{prefix}}/professional-trades/
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=BOUNDARY
+
+--BOUNDARY
+Content-Disposition: form-data; name="trade_license_number"
+
+TL-2025-0001
+--BOUNDARY
+Content-Disposition: form-data; name="trade_license_expiry_date"
+
+2030-12-31
+--BOUNDARY
+Content-Disposition: form-data; name="trade_license_file"; filename="trade.pdf"
+Content-Type: application/pdf
+
+< ./trade.pdf
+--BOUNDARY--
+
+###
+# List My Trades (shortcut)
+GET {{base}}{{prefix}}/professional-trades/mine/
+Authorization: Bearer {{token}}
+
+###
+# List Trades (scoped to me; staff sees all)
+GET {{base}}{{prefix}}/professional-trades/
+Authorization: Bearer {{token}}
+
+###
+# Retrieve Trade
+GET {{base}}{{prefix}}/professional-trades/{{trade_id}}/
+Authorization: Bearer {{token}}
+
+###
+# Update Trade
+PATCH {{base}}{{prefix}}/professional-trades/{{trade_id}}/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "trade_license_number": "TL-2025-0099" }
+
+###
+# Delete Trade
+DELETE {{base}}{{prefix}}/professional-trades/{{trade_id}}/
+Authorization: Bearer {{token}}
+
+########################################################
+# Professional Inventory (many)
+########################################################
+
+###
+# Create Inventory Item
+POST {{base}}{{prefix}}/professional-inventories/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -110,36 +209,44 @@ Content-Type: application/json
   "unit": "pieces"
 }
 
-GET http://localhost:8000/api/professional-inventories/
-Authorization: Bearer <token>
+###
+# List My Inventory
+GET {{base}}{{prefix}}/professional-inventories/
+Authorization: Bearer {{token}}
 
-GET http://localhost:8000/api/professional-inventories/{id}/
-Authorization: Bearer <token>
+###
+# Retrieve Inventory Item
+GET {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
+Authorization: Bearer {{token}}
 
-PATCH http://localhost:8000/api/professional-inventories/{id}/
-Authorization: Bearer <token>
+###
+# Update Inventory Item
+PATCH {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{
-  "quantity": 15.00
-}
+{ "quantity": 15.00 }
 
-DELETE http://localhost:8000/api/professional-inventories/{id}/
-Authorization: Bearer <token>
+###
+# Delete Inventory Item
+DELETE {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
+Authorization: Bearer {{token}}
 
-DELETE http://localhost:8000/api/professional-inventories/{id}/
-Authorization: Bearer <token>
+########################################################
+# Professional Tasks (many)
+########################################################
 
-# Professional Task
-POST http://localhost:8000/api/professional-tasks/
-Authorization: Bearer <token>
+###
+# Create Task
+POST {{base}}{{prefix}}/professional-tasks/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "worker_name": "John Doe",
   "worker_phone": "+1234567890",
   "worker_email": "john@example.com",
-  "start_date": "2023-12-01",
+  "start_date": "2025-12-01",
   "start_time": "09:00:00",
   "end_time": "17:00:00",
   "price_per_hour": 25.00,
@@ -147,26 +254,37 @@ Content-Type: application/json
   "status": "pending"
 }
 
-GET http://localhost:8000/api/professional-tasks/
-Authorization: Bearer <token>
+###
+# List My Tasks
+GET {{base}}{{prefix}}/professional-tasks/
+Authorization: Bearer {{token}}
 
-GET http://localhost:8000/api/professional-tasks/{id}/
-Authorization: Bearer <token>
+###
+# Retrieve Task
+GET {{base}}{{prefix}}/professional-tasks/{{task_id}}/
+Authorization: Bearer {{token}}
 
-PATCH http://localhost:8000/api/professional-tasks/{id}/
-Authorization: Bearer <token>
+###
+# Update Task
+PATCH {{base}}{{prefix}}/professional-tasks/{{task_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{
-  "status": "completed"
-}
+{ "status": "completed" }
 
-DELETE http://localhost:8000/api/professional-tasks/{id}/
-Authorization: Bearer <token>
+###
+# Delete Task
+DELETE {{base}}{{prefix}}/professional-tasks/{{task_id}}/
+Authorization: Bearer {{token}}
 
-# Professional Rating
-POST http://localhost:8000/api/professional-ratings/
-Authorization: Bearer <token>
+########################################################
+# Professional Ratings (many)
+########################################################
+
+###
+# Create Rating
+POST {{base}}{{prefix}}/professional-ratings/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -175,50 +293,88 @@ Content-Type: application/json
   "review": "Excellent service!"
 }
 
-GET http://localhost:8000/api/professional-ratings/
-Authorization: Bearer <token>
+###
+# List My Ratings
+GET {{base}}{{prefix}}/professional-ratings/
+Authorization: Bearer {{token}}
 
-GET http://localhost:8000/api/professional-ratings/{id}/
-Authorization: Bearer <token>
+###
+# Retrieve Rating
+GET {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
+Authorization: Bearer {{token}}
 
-PATCH http://localhost:8000/api/professional-ratings/{id}/
-Authorization: Bearer <token>
+###
+# Update Rating
+PATCH {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "rating": 4 }
+
+###
+# Delete Rating
+DELETE {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
+Authorization: Bearer {{token}}
+
+########################################################
+# Professional Payouts (read-only for pros in your setup)
+########################################################
+
+###
+# List My Payouts
+GET {{base}}{{prefix}}/professional-payouts/
+Authorization: Bearer {{token}}
+
+###
+# Retrieve Payout
+GET {{base}}{{prefix}}/professional-payouts/{{payout_id}}/
+Authorization: Bearer {{token}}
+
+########################################################
+# Bank Info (singleton per professional)
+########################################################
+
+###
+# Upsert Bank Info (create if missing, update if exists)
+POST {{base}}{{prefix}}/bank-info/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "rating": 4
+  "institution_name": "RBC",
+  "institution_number": "003",
+  "transit_number": "12345",
+  "account_number": "00123456789",
+  "account_holder_name": "Jane Doe"
 }
 
-DELETE http://localhost:8000/api/professional-ratings/{id}/
-Authorization: Bearer <token>
+###
+# Get My Bank Info (singleton)
+GET {{base}}{{prefix}}/bank-info/me/
+Authorization: Bearer {{token}}
 
-# Professional Payout
-POST http://localhost:8000/api/professional-payouts/
-Authorization: Bearer <token>
+###
+# List (scoped to me; usually single)
+GET {{base}}{{prefix}}/bank-info/
+Authorization: Bearer {{token}}
+
+###
+# Retrieve (by id)
+GET {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
+Authorization: Bearer {{token}}
+
+###
+# Update (PATCH)
+PATCH {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "stripe_account_id": "acct_1234567890",
-  "payouts_enabled": true,
-  "onboarding_complete": false,
-  "last_payout_status": "pending"
+  "institution_name": "Royal Bank of Canada",
+  "account_number": "999888777666"
 }
 
-GET http://localhost:8000/api/professional-payouts/
-Authorization: Bearer <token>
-
-GET http://localhost:8000/api/professional-payouts/{id}/
-Authorization: Bearer <token>
-
-PATCH http://localhost:8000/api/professional-payouts/{id}/
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "payouts_enabled": false
-}
-
-DELETE http://localhost:8000/api/professional-payouts/{id}/
-Authorization: Bearer <token>
-
-
+###
+# Delete (if enabled)
+DELETE {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
+Authorization: Bearer {{token}}

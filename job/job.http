@@ -1,22 +1,21 @@
-==============================
- JOB MANAGEMENT API ENDPOINTS
-==============================
+@base = http://127.0.0.1:8000
+@token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
+@job_id = 345
+@offer_id = 123
+@unit_req_id = 777
+@payment_intent_id = pi_123
+@service_id = 12
 
-AUTH HEADERS REQUIRED:
-Authorization: Bearer <your_token>
+###
+# Create Job (JSON)
+POST {{base}}/jobs/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
-------------------------------
- JOB CREATION / MANAGEMENT
-------------------------------
-
-POST   /jobs/
-→ Create a new job (with address, service types, attachments)
-Body (JSON Format):
 {
   "title": "Fix kitchen sink",
   "description": "Pipe leaking",
-  "service": 12,
+  "service": {{service_id}},
   "start_date": "2025-10-12",
   "start_time": "14:30:00",
   "address": {
@@ -29,45 +28,96 @@ Body (JSON Format):
     "postal_code": "M5V3L9"
   },
   "job_service_types": [
-    {"service_type_id": 101},
-    {"service_type_id": 102}
+    { "service_type_id": 101 },
+    { "service_type_id": 102 }
   ]
 }
 
-Body (Form Data Format):
-title = Fix kitchen sink
-description = Pipe leaking under sink
-service = 1
-start_date = 2025-10-15
-start_time = 14:30:00
-address[street_number] = 123
-address[street_name] = Main St
-address[unit_suite] = 3A
-address[city_name] = Toronto
-address[province_name] = Ontario
-address[country_name] = Canada
-address[postal_code] = M5V3L9
-job_service_types[0][service_type_id] = 1
-job_service_types[1][service_type_id] = 2
-job_attachments = @/path/to/image.jpg
+###
+# Create Job (multipart form with attachments)
+POST {{base}}/jobs/
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
 
-GET    /jobs/list/
-→ List all jobs of the authenticated user
-Params (optional):
-?status=pending,in_progress
-&service=12
-&service_types=101,102
-&city=Toronto
-&province=ON
-&is_paid=true
-&ordering=-created_at
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="title"
 
-GET    /jobs/<id>/
-→ Retrieve job details
+Fix kitchen sink
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
 
-PATCH  /jobs/<id>/update/
-→ Update job info, address, service types, or attachments (old ones removed)
-Body (example):
+Pipe leaking under sink
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="service"
+
+{{service_id}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="start_date"
+
+2025-10-15
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="start_time"
+
+14:30:00
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[street_number]"
+
+123
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[street_name]"
+
+Main St
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[unit_suite]"
+
+3A
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[city_name]"
+
+Toronto
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[province_name]"
+
+Ontario
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[country_name]"
+
+Canada
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="address[postal_code]"
+
+M5V3L9
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="job_service_types[0][service_type_id]"
+
+101
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="job_service_types[1][service_type_id]"
+
+102
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="job_attachments"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+# List My Jobs (filters optional)
+GET {{base}}/jobs/list/?status=pending,in_progress&service={{service_id}}&service_types=101,102&city=Toronto&province=ON&is_paid=true&ordering=-created_at
+Authorization: Bearer {{token}}
+
+###
+# Get Job Detail
+GET {{base}}/jobs/{{job_id}}/
+Authorization: Bearer {{token}}
+
+###
+# Update Job (PATCH partial)
+PATCH {{base}}/jobs/{{job_id}}/update/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
 {
   "title": "Fix kitchen sink - urgent",
   "description": "Pipe burst",
@@ -80,115 +130,147 @@ Body (example):
     "province_name": "Ontario",
     "country_name": "Canada",
     "postal_code": "M5V1L9"
-  }
+  },
+  "job_service_types": [
+    { "service_type_id": 101 }
+  ]
 }
 
-DELETE /jobs/<id>/delete/
-→ Delete job (only if NOT paid and status NOT in_progress/completed)
+###
+# Delete Job (only if not paid and not in_progress/completed)
+DELETE {{base}}/jobs/{{job_id}}/delete/
+Authorization: Bearer {{token}}
 
+###
+# Payment: Create Payment Sheet (Stripe)
+POST {{base}}/payment-sheet/
+Authorization: Bearer {{token}}
+Content-Type: application/json
 
-------------------------------
- PAYMENT
-------------------------------
-
-POST   /payment-sheet/
-→ Create Stripe PaymentIntent for a job
-Body: { "job_id": 345 }
-
-POST   /payment-success/
-→ Confirm successful payment
-Body: {
-  "payment_intent_id": "pi_123",
-  "job_id": 345
-}
-
-
-------------------------------
- JOB UNIT UPDATE REQUESTS
-------------------------------
-
-POST   /jobs/unit-update-requests/
-→ Professional sends a unit quantity update request
-Body:
 {
-  "job_id": 345,
+  "job_id": {{job_id}}
+}
+
+###
+# Payment: Confirm Success (marks paid_amount etc.)
+POST {{base}}/payment-success/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "payment_intent_id": "{{payment_intent_id}}",
+  "job_id": {{job_id}},
+  "amount_paid": "25.00"
+}
+
+###
+# Complete Job (creates/updates ProfessionalPayout)
+POST {{base}}/jobs/{{job_id}}/complete/
+Authorization: Bearer {{token}}
+
+###
+# Cancel Job (only if unassigned, unpaid, not in_progress/completed)
+POST {{base}}/jobs/{{job_id}}/cancel/
+Authorization: Bearer {{token}}
+
+###
+# Owner: List Unit Update Requests
+GET {{base}}/jobs/unit-update-requests/owner/?status=pending,accepted&job={{job_id}}
+Authorization: Bearer {{token}}
+
+###
+# Pro: List My Unit Update Requests
+GET {{base}}/jobs/unit-update-requests/pro/?status=pending,rejected
+Authorization: Bearer {{token}}
+
+###
+# Create Unit Update Request (Pro only)
+POST {{base}}/jobs/unit-update-requests/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "job_id": {{job_id}},
   "new_unit_qty": "3.5"
 }
 
-GET    /jobs/unit-update-requests/owner/
-→ Job owner lists all unit update requests on their jobs
-Params (optional): ?status=pending,accepted&job=345
+###
+# Accept Unit Update Request (Owner)
+POST {{base}}/jobs/unit-update-requests/{{unit_req_id}}/accept/
+Authorization: Bearer {{token}}
 
-GET    /jobs/unit-update-requests/pro/
-→ Professional lists their own unit update requests
-Params (optional): ?status=pending,rejected
+###
+# Reject Unit Update Request (Owner)
+POST {{base}}/jobs/unit-update-requests/{{unit_req_id}}/reject/
+Authorization: Bearer {{token}}
 
-POST   /jobs/unit-update-requests/<id>/accept/
-→ Job owner accepts unit update request
+###
+# Pro: List Offers sent to me
+GET {{base}}/offers/?status=sent,viewed
+Authorization: Bearer {{token}}
 
-POST   /jobs/unit-update-requests/<id>/reject/
-→ Job owner rejects unit update request
+###
+# Pro: Accept Offer (assign job)
+POST {{base}}/offers/{{offer_id}}/accept/
+Authorization: Bearer {{token}}
 
+###
+# Pro: List My Assigned Jobs (filters optional)
+GET {{base}}/pro/jobs/list/?status=in_progress&ordering=-created_at
+Authorization: Bearer {{token}}
 
-------------------------------
- JOB OFFERS (Professionals)
-------------------------------
+###
+# Pro: Get Assigned Job Detail
+GET {{base}}/pro/jobs/{{job_id}}/
+Authorization: Bearer {{token}}
 
-GET    /offers/
-→ Professional lists job offers sent to them
-Params: ?status=sent,viewed,accepted
+###
+# Job Attachments (owner or assigned pro)
+GET {{base}}/jobs/{{job_id}}/attachments/
+Authorization: Bearer {{token}}
 
-POST   /offers/<id>/accept/
-→ Professional accepts an offer (assigns job)
+###
+# Job Service Types (owner or assigned pro)
+GET {{base}}/jobs/{{job_id}}/service-types/
+Authorization: Bearer {{token}}
 
+###
+# Job Address (owner or assigned pro)
+GET {{base}}/jobs/{{job_id}}/address/
+Authorization: Bearer {{token}}
 
-------------------------------
- PROFESSIONAL JOBS
-------------------------------
+###
+# Job Ratings: Create
+POST {{base}}/job-rates/
+Authorization: Bearer {{token}}
+Content-Type: application/json
 
-GET    /pro/jobs/list/
-→ List all jobs assigned to the professional
-Params (same filters as job list)
-
-GET    /pro/jobs/<id>/
-→ Retrieve details of a professional’s assigned job
-
-
-------------------------------
- JOB DETAILS (Extra Info)
-------------------------------
-
-GET    /jobs/<id>/attachments/
-→ Retrieve all job attachments (files uploaded)
-
-GET    /jobs/<id>/service-types/
-→ Retrieve all service types associated with a job
-
-GET    /jobs/<id>/address/
-→ Retrieve the full address details of a job
-
-
-------------------------------
- JOB RATINGS
-------------------------------
-
-POST   /job-rates/
-→ Create a rating for a completed job
-Body:
 {
-  "job_id": 345,
+  "job_id": {{job_id}},
   "rate": 5
 }
 
-GET    /job-rates/
-→ List all job ratings
+###
+# Job Ratings: List
+GET {{base}}/job-rates/
+Authorization: Bearer {{token}}
 
-GET    /job-rates/<id>/
-PATCH  /job-rates/<id>/
-DELETE /job-rates/<id>/
-→ Retrieve / update / delete a rating
+###
+# Job Ratings: Retrieve
+GET {{base}}/job-rates/1/
+Authorization: Bearer {{token}}
 
+###
+# Job Ratings: Update
+PATCH {{base}}/job-rates/1/
+Authorization: Bearer {{token}}
+Content-Type: application/json
 
-==============================
- END OF JOB API ENDPOINTS
-==============================
+{
+  "rate": 4
+}
+
+###
+# Job Ratings: Delete
+DELETE {{base}}/job-rates/1/
+Authorization: Bearer {{token}}

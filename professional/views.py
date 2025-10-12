@@ -32,8 +32,6 @@ from .serializers import  (
     BankInfoSerializer 
 )
 
-from .permissions import IsOwnerOrAdmin
-
 class ProfessionalViewSet(viewsets.ModelViewSet):
     queryset = Professional.objects.select_related("user").all()
     serializer_class = ProfessionalSerializer

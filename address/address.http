@@ -1,5 +1,14 @@
-POST http://127.0.0.1:8000/address/addresses/
-Authorization: Bearer <access_token>
+@base_url = http://127.0.0.1:8000/address
+@access_token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
+@address_id = 42
+@country_id = 1
+@province_id = 3
+@city_id = 7
+
+###
+# 1) Create Address
+POST {{base_url}}/addresses/
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
@@ -11,28 +20,42 @@ Content-Type: application/json
   "unit_suite": "5B",
   "postal_code": "M5V 2B7"
 }
+
+###
+# 2) Retrieve Address
+GET {{base_url}}/addresses/{{address_id}}/
+Authorization: Bearer {{access_token}}
+
+###
+# 3) Update Address (PUT - full)
+PUT {{base_url}}/addresses/{{address_id}}/
+Authorization: Bearer {{access_token}}
+Content-Type: application/json
+
 {
-  "id": 42,
+  "country_code": "CA",
+  "province_code": "ON",
+  "city_name": "Toronto",
   "street_number": "123",
   "street_name": "Queen St W",
   "unit_suite": "5B",
-  "postal_code": "M5V 2B7",
-  "city": { "id": 7, "name": "Toronto" },
-  "province": { "id": 3, "name": "Ontario", "code": "ON" },
-  "country": { "id": 1, "name": "Canada", "code": "CA" },
-  "date_created": "2025-08-25T10:31:01.123Z",
-  "date_updated": "2025-08-25T10:31:01.123Z"
+  "postal_code": "M5V 2B7"
 }
 
-
-
-PATCH /address/addresses/42/
-Authorization: Bearer <access>
+###
+# 4) Update Address (PATCH - partial: street_name)
+PATCH {{base_url}}/addresses/{{address_id}}/
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
-{ "street_name": "King St W" }
-PATCH /address/addresses/42/
-Authorization: Bearer <access>
+{
+  "street_name": "King St W"
+}
+
+###
+# 5) Update Address (PATCH - move to Montréal)
+PATCH {{base_url}}/addresses/{{address_id}}/
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
@@ -42,9 +65,36 @@ Content-Type: application/json
   "postal_code": "H3A 2A7"
 }
 
+###
+# 6) Delete Address
+DELETE {{base_url}}/addresses/{{address_id}}/
+Authorization: Bearer {{access_token}}
 
-DELETE /address/addresses/42/
-Authorization: Bearer <access>
+###
+# 7) List My Addresses
+GET {{base_url}}/addresses-list/
+Authorization: Bearer {{access_token}}
 
-GET /address/addressed-list/
-Authorization: Bearer <access>
+###
+# 8) List Countries (public unless you add auth)
+GET {{base_url}}/countries/
+
+###
+# 9) Country Detail
+GET {{base_url}}/countries/{{country_id}}/
+
+###
+# 10) List Provinces for Country
+GET {{base_url}}/countries/{{country_id}}/provinces/
+
+###
+# 11) Province Detail
+GET {{base_url}}/countries/{{country_id}}/provinces/{{province_id}}/
+
+###
+# 12) List Cities for Province
+GET {{base_url}}/countries/{{country_id}}/provinces/{{province_id}}/cities/
+
+###
+# 13) City Detail
+GET {{base_url}}/countries/{{country_id}}/provinces/{{province_id}}/cities/{{city_id}}/

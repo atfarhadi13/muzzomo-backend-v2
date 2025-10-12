@@ -1,117 +1,150 @@
-POST /auth/register/
-Headers: Content-Type: application/json
-{ "email": "newuser@example.com", "password": "Str0ngPass!" }
-{ "detail": "Registration successful. OTP has been sent to your email." }
-{ "password": ["This password is too short."] }
+@base = http://127.0.0.1:8000
+@token = <PUT_ACCESS_TOKEN_HERE>
+@refresh = <PUT_REFRESH_TOKEN_HERE>
+@email = newuser@example.com
+@password = Str0ngPass!
+@new_password = EvenStrongerPass1!
+@new_email = new.address@example.com
+@otp = 123456
 
+###
+# Register
+POST {{base}}/auth/register/
+Content-Type: application/json
 
-POST /auth/verify-email/
-Headers: Content-Type: application/json
-{ "email": "newuser@example.com", "code": "123456" }
-{ "detail": "Email verified successfully.", "email": "newuser@example.com", "is_verified": true }
-{ "detail": "Invalid or expired code." }
-
-
-POST /auth/resend-otp/
-Headers: Content-Type: application/json
-{ "email": "newuser@example.com" }
-{ "detail": "If an account exists, a new code was sent." }
-
-
-POST /auth/login/
-Headers: Content-Type: application/json
-{ "email": "newuser@example.com", "password": "Str0ngPass!" }
 {
-  "refresh": "<refresh_token>",
-  "access": "<access_token>",
-  "user": {
-    "email": "newuser@example.com",
-    "first_name": "",
-    "last_name": "",
-    "is_verified": true,
-    "is_provider": false,
-    "is_professional": false
-  }
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
-{ "detail": "No active account found with the given credentials" }
 
-
-POST /auth/token/refresh/
-Headers: Content-Type: application/json
-{ "refresh": "<refresh_token>" }
-{ "access": "<new_access_token>" }
-{ "detail": "Token is invalid or expired", "code": "token_not_valid" }
-
-
-POST /auth/logout/
-Headers:
-Authorization: Bearer <access_token>
+###
+# Verify Email (OTP)
+POST {{base}}/auth/verify-email/
 Content-Type: application/json
-{ "refresh": "<refresh_token>" }
-{ "detail": "Logged out successfully." }
-{ "detail": "Invalid refresh token." }
 
-
-POST /auth/password-reset/request/
-Headers: Content-Type: application/json
-{ "email": "newuser@example.com" }
-{ "detail": "If an account exists, a reset code was sent." }
-
-
-POST /auth/password-reset/confirm/
-Headers: Content-Type: application/json
 {
-  "email": "newuser@example.com",
-  "code": "123456",
-  "new_password": "EvenStrongerPass1!"
+  "email": "{{email}}",
+  "code": "{{otp}}"
 }
-{ "detail": "Password has been reset successfully." }
-{ "detail": "Invalid or expired code." }
-{ "new_password": ["This password is too common."] }
 
-
-POST /auth/email-update/request/
-Headers:
-Authorization: Bearer <access_token>
+###
+# Resend OTP (generic verify flow)
+POST {{base}}/auth/resend-otp/
 Content-Type: application/json
-{ "new_email": "new.address@example.com" }
-{ "detail": "Verification code sent to new email." }
-{ "new_email": ["New email must be different from current email."] }
-{ "new_email": ["This email is already in use."] }
 
+{
+  "email": "{{email}}"
+}
 
-POST /auth/email-update/confirm/
-Headers:
-Authorization: Bearer <access_token>
+###
+# Login (email + password)
+POST {{base}}/auth/login/
 Content-Type: application/json
-{ "detail": "Email updated successfully.", "email": "new.address@example.com" }
-{ "detail": "Invalid or expired code." }
-{ "detail": "Email already in use. Please request a new code." }
 
-POST http://127.0.0.1:8000/auth/profile/image/
-Headers: Authorization: Bearer <access_token>
-Body: form-data
-Key: profile_image (Type: File), choose an image file
-{ "detail": "Profile image updated.", "profile_image": "http://127.0.0.1:8000/media/provider_profiles/abc123.png" }
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
 
-
-
-PATCH http://127.0.0.1:8000/auth/profile/basic/
-Headers:
-Authorization: Bearer <access_token>
+###
+# Refresh Access Token
+POST {{base}}/auth/token/refresh/
 Content-Type: application/json
+
+{
+  "refresh": "{{refresh}}"
+}
+
+###
+# Logout (blacklist refresh)
+POST {{base}}/auth/logout/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "refresh": "{{refresh}}"
+}
+
+###
+# Password Reset — Request Code
+POST {{base}}/auth/password-reset/request/
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+###
+# Password Reset — Confirm (use OTP)
+POST {{base}}/auth/password-reset/confirm/
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "{{otp}}",
+  "new_password": "{{new_password}}"
+}
+
+###
+# Password Reset — Resend OTP
+POST {{base}}/password-reset/resend-otp/
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+###
+# Email Update — Request (send code to new email)
+POST {{base}}/auth/email-update/request/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "new_email": "{{new_email}}"
+}
+
+###
+# Email Update — Confirm (verify with OTP)
+POST {{base}}/auth/email-update/confirm/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "{{otp}}"
+}
+
+###
+# Email Update — Resend OTP
+POST {{base}}/email-update/resend-otp/
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+###
+# Profile — Upload/Replace Image
+# Use REST Client's file upload syntax: < /absolute/path/to/file
+POST {{base}}/auth/profile/image/
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=BOUND
+
+--BOUND
+Content-Disposition: form-data; name="profile_image"; filename="avatar.png"
+Content-Type: image/png
+
+< /absolute/path/to/avatar.png
+--BOUND--
+
+###
+# Profile — Basic fields (first/last/phone) - PATCH
+PATCH {{base}}/auth/profile/basic/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
 {
   "first_name": "Amin",
   "last_name": "Nasiri",
   "phone_number": "+359888123456"
-}
-
-{
-  "detail": "Profile updated.",
-  "user": {
-    "email": "you@example.com",
-    "first_name": "Amin",
-    "last_name": "Nasiri",
-    "phone_number": "+359888123456"
-  }
 }
