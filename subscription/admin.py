@@ -10,7 +10,6 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_filter = ("price",)
     search_fields = ("name",)
     ordering = ("price",)
-    readonly_fields = ("stripe_plan_id",)
 
     @admin.display(description="Description")
     def short_description(self, obj):
@@ -39,8 +38,6 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
     readonly_fields = (
         "stripe_subscription_id",
         "start_date",
-        "end_date",
-        "trial_end",
     )
 
     @admin.display(description="User", ordering="user__email")

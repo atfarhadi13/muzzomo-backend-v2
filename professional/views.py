@@ -8,12 +8,29 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework import generics, permissions
 
-from .models import Professional, ProfessionalService, ProfessionalInsurance, ProfessionalTrade, ProfessionalInventory, ProfessionalTask, ProfessionalRating, ProfessionalPayout
+from .models import ( 
+    Professional, 
+    ProfessionalService, 
+    ProfessionalInsurance, 
+    ProfessionalTrade, 
+    ProfessionalInventory, 
+    ProfessionalTask, 
+    ProfessionalRating, 
+    ProfessionalPayout, 
+    BankInfo 
+)
 
-from .serializers import  ( ProfessionalSerializer, ProfessionalServiceSerializer, 
-                           ProfessionalInsuranceSerializer, ProfessionalTradeSerializer,
-                           ProfessionalInventorySerializer, ProfessionalTaskSerializer,
-                           ProfessionalRatingSerializer, ProfessionalPayoutSerializer )
+from .serializers import  ( 
+    ProfessionalSerializer, 
+    ProfessionalServiceSerializer, 
+    ProfessionalInsuranceSerializer, 
+    ProfessionalTradeSerializer,
+    ProfessionalInventorySerializer, 
+    ProfessionalTaskSerializer,
+    ProfessionalRatingSerializer, 
+    ProfessionalPayoutSerializer, 
+    BankInfoSerializer 
+)
 
 from .permissions import IsOwnerOrAdmin
 
@@ -216,3 +233,36 @@ class ProfessionalPayoutViewSet(viewsets.ModelViewSet):
         except Exception as e:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({"detail": str(e)})
+        
+class BankInfoViewSet(viewsets.ModelViewSet):
+    serializer_class = BankInfoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        prof = getattr(self.request.user, "professional_profile", None)
+        if not prof:
+            return BankInfo.objects.none()
+        return BankInfo.objects.filter(professional=prof)
+
+    def perform_create(self, serializer):
+        prof = getattr(self.request.user, "professional_profile", None)
+        if not prof:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "User is not a professional."})
+
+        data = serializer.validated_data
+        obj, _created = BankInfo.objects.update_or_create(
+            professional=prof,
+            defaults=data,
+        )
+        serializer.instance = obj
+
+    @action(detail=False, methods=["get"], url_path="me")
+    def me(self, request):
+        prof = getattr(request.user, "professional_profile", None)
+        if not prof:
+            return Response({"detail": "User is not a professional."}, status=status.HTTP_400_BAD_REQUEST)
+        obj = BankInfo.objects.filter(professional=prof).first()
+        if not obj:
+            return Response({"detail": "No bank info found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self.get_serializer(obj).data)

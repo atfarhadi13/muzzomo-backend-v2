@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator, MinLengthValidator, MaxLengthValidator
 from django.db import models, transaction
 from django.db.models import Q, Avg
 from django.db.models.functions import Lower
@@ -20,6 +20,7 @@ def validate_file_format(file):
         raise ValidationError("File must be a PDF, JPG, JPEG, or PNG.")
 
 phone_validator = RegexValidator(r'^\+?\d{7,15}$', 'Enter a valid phone number (7–15 digits, optional leading "+").')
+digits_only = RegexValidator(r'^\d+$', 'Digits only.')
 
 class Professional(models.Model):
     class VerificationStatus(models.TextChoices):
@@ -280,3 +281,48 @@ class ProfessionalPayout(models.Model):
 
     def __str__(self):
         return f"Payout info for {self.professional.user.email}"
+
+class BankInfo(models.Model):
+    professional = models.OneToOneField(
+        Professional,
+        on_delete=models.CASCADE,
+        related_name='bank_info'
+    )
+    institution_name = models.CharField(max_length=255, blank=True, null=True)
+    institution_number = models.CharField(
+        max_length=3, blank=True, null=True,
+        validators=[MinLengthValidator(3), MaxLengthValidator(3), digits_only]
+    )
+    transit_number = models.CharField(
+        max_length=5, blank=True, null=True,
+        validators=[MinLengthValidator(5), MaxLengthValidator(5), digits_only]
+    )
+    account_number = models.CharField(
+        max_length=34, blank=True, null=True,
+        validators=[RegexValidator(r'^[A-Za-z0-9]+$', 'Letters and digits only.')]
+    )
+    account_holder_name = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['professional']),
+            models.Index(fields=['institution_number', 'transit_number']),
+        ]
+        verbose_name = 'Bank info'
+        verbose_name_plural = 'Bank info'
+
+    def __str__(self):
+        return f'{self.professional} — {self.institution_name or "Bank"}'
+
+    @property
+    def account_last4(self):
+        return (self.account_number or '')[-4:] if self.account_number else ''
+
+    @property
+    def masked_account_number(self):
+        if not self.account_number:
+            return ''
+        n = len(self.account_number)
+        return f'{"*" * max(n-4, 0)}{self.account_number[-4:]}'

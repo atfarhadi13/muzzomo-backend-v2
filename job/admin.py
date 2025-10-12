@@ -1,11 +1,15 @@
+import csv
+
 from django.contrib import admin, messages
+from django.db.models import Sum, Count
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from django.utils.html import format_html
+from django.http import HttpResponse
+from django.utils import timezone
 
 from .models import (
     Job, JobAttachment, JobServiceType, JobRate,
-    JobUnitUpdateRequest, JobOffer
+    JobUnitUpdateRequest, JobOffer, ProfessionalPayout
 )
 
 
@@ -173,3 +177,191 @@ class JobOfferAdmin(admin.ModelAdmin):
             messages.success(request, f'Accepted {processed} offer(s).')
         if errors and not processed:
             messages.warning(request, 'No offers accepted.')
+
+@admin.register(ProfessionalPayout)
+class ProfessionalPayoutAdmin(admin.ModelAdmin):
+    date_hierarchy = "created_at"
+    ordering = ("-created_at",)
+
+    list_display = (
+        "id",
+        "job_link",
+        "professional",
+        "currency",
+        "gross_amount_display",
+        "fee_percent_display",
+        "fee_amount_display",
+        "net_amount_display",
+        "status_badge",
+        "scheduled_at",
+        "paid_at",
+        "created_at",
+    )
+    list_select_related = ("professional", "job",)
+    list_filter = (
+        "status",
+        "currency",
+        ("scheduled_at", admin.DateFieldListFilter),
+        ("paid_at", admin.DateFieldListFilter),
+        ("created_at", admin.DateFieldListFilter),
+    )
+    search_fields = (
+        "id",
+        "job__id",
+        "job__title",
+        "professional__id",
+        "professional__user__email",
+        "professional__user__first_name",
+        "professional__user__last_name",
+        "dest_institution_name",
+        "dest_institution_number",
+        "dest_transit_number",
+        "dest_account_holder_name",
+    )
+    readonly_fields = (
+        "job",
+        "professional",
+        "currency",
+        "gross_amount",
+        "fee_percent_applied",
+        "fee_amount",
+        "net_amount",
+        "status",
+        "scheduled_at",
+        "paid_at",
+        "dest_institution_name",
+        "dest_institution_number",
+        "dest_transit_number",
+        "dest_account_last4",
+        "dest_account_holder_name",
+        "created_at",
+        "updated_at",
+    )
+
+    fieldsets = (
+        ("Links", {"fields": ("job", "professional")}),
+        ("Amounts", {
+            "fields": (
+                "currency",
+                "gross_amount",
+                "fee_percent_applied",
+                "fee_amount",
+                "net_amount",
+            )
+        }),
+        ("Status & Timing", {"fields": ("status", "scheduled_at", "paid_at")}),
+        ("Destination Snapshot (optional)", {
+            "classes": ("collapse",),
+            "fields": (
+                "dest_institution_name",
+                "dest_institution_number",
+                "dest_transit_number",
+                "dest_account_last4",
+                "dest_account_holder_name",
+            )
+        }),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+    )
+
+    actions = [
+        "action_mark_scheduled",
+        "action_mark_paid",
+        "action_mark_failed",
+        "action_show_totals",
+        "action_export_csv",
+    ]
+
+    @admin.display(description="Job", ordering="job_id")
+    def job_link(self, obj: ProfessionalPayout):
+        return f"#{obj.job_id} — {getattr(obj.job, 'title', '')}"
+
+    @admin.display(description="Gross", ordering="gross_amount")
+    def gross_amount_display(self, obj):
+        return f"{obj.gross_amount:.2f}"
+
+    @admin.display(description="Fee %", ordering="fee_percent_applied")
+    def fee_percent_display(self, obj):
+        return f"{obj.fee_percent_applied:.2f}%"
+
+    @admin.display(description="Fee", ordering="fee_amount")
+    def fee_amount_display(self, obj):
+        return f"{obj.fee_amount:.2f}"
+
+    @admin.display(description="Net", ordering="net_amount")
+    def net_amount_display(self, obj):
+        return f"{obj.net_amount:.2f}"
+
+    @admin.display(description="Status", ordering="status")
+    def status_badge(self, obj: ProfessionalPayout):
+        return obj.get_status_display()
+
+    def action_mark_scheduled(self, request, queryset):
+        now = timezone.now()
+        updated = queryset.update(status=ProfessionalPayout.STATUS_SCHEDULED, scheduled_at=now)
+        self.message_user(request, f"Marked {updated} payout(s) as Scheduled.", level=messages.SUCCESS)
+    action_mark_scheduled.short_description = "Mark selected as Scheduled"
+
+    def action_mark_paid(self, request, queryset):
+        now = timezone.now()
+        updated = queryset.update(status=ProfessionalPayout.STATUS_PAID, paid_at=now)
+        self.message_user(request, f"Marked {updated} payout(s) as Paid.", level=messages.SUCCESS)
+    action_mark_paid.short_description = "Mark selected as Paid"
+
+    def action_mark_failed(self, request, queryset):
+        updated = queryset.update(status=ProfessionalPayout.STATUS_FAILED)
+        self.message_user(request, f"Marked {updated} payout(s) as Failed.", level=messages.WARNING)
+    action_mark_failed.short_description = "Mark selected as Failed"
+
+    def action_show_totals(self, request, queryset):
+        agg = queryset.aggregate(
+            count=Count("id"),
+            gross=Sum("gross_amount"),
+            fee=Sum("fee_amount"),
+            net=Sum("net_amount"),
+        )
+        msg = (
+            f"Selected: {agg['count']} payout(s) — "
+            f"Gross: {agg['gross'] or 0:.2f} | "
+            f"Fees: {agg['fee'] or 0:.2f} | "
+            f"Net: {agg['net'] or 0:.2f}"
+        )
+        self.message_user(request, msg, level=messages.INFO)
+    action_show_totals.short_description = "Show totals (count, gross, fees, net) in messages"
+
+    def action_export_csv(self, request, queryset):
+        ts = timezone.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"payouts_{ts}.csv"
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        writer = csv.writer(resp)
+        writer.writerow([
+            "id", "job_id", "job_title", "professional_id", "professional_email",
+            "currency", "gross_amount", "fee_percent", "fee_amount", "net_amount",
+            "status", "scheduled_at", "paid_at", "created_at",
+            "dest_institution_name", "dest_institution_number", "dest_transit_number",
+            "dest_account_last4", "dest_account_holder_name",
+        ])
+        for p in queryset.select_related("job", "professional", "professional__user"):
+            writer.writerow([
+                p.id,
+                p.job_id,
+                getattr(p.job, "title", ""),
+                p.professional_id,
+                getattr(getattr(p.professional, "user", None), "email", ""),
+                p.currency,
+                f"{p.gross_amount:.2f}",
+                f"{p.fee_percent_applied:.2f}",
+                f"{p.fee_amount:.2f}",
+                f"{p.net_amount:.2f}",
+                p.get_status_display(),
+                p.scheduled_at.isoformat() if p.scheduled_at else "",
+                p.paid_at.isoformat() if p.paid_at else "",
+                p.created_at.isoformat() if p.created_at else "",
+                p.dest_institution_name or "",
+                p.dest_institution_number or "",
+                p.dest_transit_number or "",
+                p.dest_account_last4 or "",
+                p.dest_account_holder_name or "",
+            ])
+        return resp
+    action_export_csv.short_description = "Export selected as CSV"

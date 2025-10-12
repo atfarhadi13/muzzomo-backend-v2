@@ -67,6 +67,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     phone_number = models.CharField(max_length=20, blank=True, null=True, validators=[phone_validator])
     profile_image = models.ImageField(upload_to=profile_image_upload_to, null=True, blank=True, 
                     validators=[validate_image_size, validate_image_format], default='path_to_default_image')
+    
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
 
     is_provider = models.BooleanField(default=False)
     is_professional = models.BooleanField(default=False)

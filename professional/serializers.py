@@ -1,6 +1,16 @@
 from rest_framework import serializers
 
-from .models import Professional, ProfessionalService, ProfessionalInsurance, ProfessionalTrade, ProfessionalInventory, ProfessionalTask, ProfessionalRating, ProfessionalPayout
+from .models import ( 
+    Professional, 
+    ProfessionalService, 
+    ProfessionalInsurance,
+    ProfessionalTrade, 
+    ProfessionalInventory, 
+    ProfessionalTask, 
+    ProfessionalRating, 
+    ProfessionalPayout,
+    BankInfo
+)
 from service.models import Service
 
 class ProfessionalSerializer(serializers.ModelSerializer):
@@ -77,3 +87,30 @@ class ProfessionalPayoutSerializer(serializers.ModelSerializer):
         model = ProfessionalPayout
         fields = '__all__'
         read_only_fields = ['professional', 'created_at', 'updated_at']
+
+class BankInfoSerializer(serializers.ModelSerializer):
+    account_last4 = serializers.SerializerMethodField(read_only=True)
+    masked_account_number = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = BankInfo
+        fields = [
+            "id",
+            "professional",
+            "institution_name",
+            "institution_number",
+            "transit_number",
+            "account_number",
+            "account_holder_name",
+            "account_last4",
+            "masked_account_number",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["professional", "account_last4", "masked_account_number", "created_at", "updated_at"]
+
+    def get_account_last4(self, obj):
+        return obj.account_last4
+
+    def get_masked_account_number(self, obj):
+        return obj.masked_account_number

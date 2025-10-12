@@ -5,10 +5,13 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.conf import settings
 
 from professional.models import Professional, ProfessionalService
 from service.models import Service, ServiceType
 from address.models import Address
+
+DEFAULT_JOB_FEE_PERCENT = Decimal(getattr(settings, "JOB_DEFAULT_FEE_PERCENT", "20.00"))
 
 def validate_file_size(file, max_size=5 * 1024 * 1024):
     if file.size > max_size:
@@ -392,3 +395,77 @@ class JobRate(models.Model):
 
     def __str__(self):
         return f"Rating {self.rate} for {self.job.title}"
+    
+
+class ProfessionalPayout(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_SCHEDULED = "scheduled"
+    STATUS_PAID = "paid"
+    STATUS_FAILED = "failed"
+    StatusChoices = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_SCHEDULED, "Scheduled"),
+        (STATUS_PAID, "Paid"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name="payout")
+    professional = models.ForeignKey(Professional, on_delete=models.PROTECT, related_name="payouts")
+
+    currency = models.CharField(max_length=10, default=getattr(settings, "DEFAULT_CURRENCY", "USD"))
+
+    gross_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    fee_percent_applied = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    status = models.CharField(max_length=12, choices=StatusChoices, default=STATUS_PENDING, db_index=True)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    dest_institution_name = models.CharField(max_length=255, blank=True, null=True)
+    dest_institution_number = models.CharField(max_length=10, blank=True, null=True)
+    dest_transit_number = models.CharField(max_length=10, blank=True, null=True)
+    dest_account_last4 = models.CharField(max_length=8, blank=True, null=True)
+    dest_account_holder_name = models.CharField(max_length=100, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["professional", "status"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Payout · Job {self.job_id} · {self.net_amount} {self.currency}"
+
+    @staticmethod
+    def _q(v: Decimal) -> Decimal:
+        return (v or Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @classmethod
+    def compute_amounts(cls, gross: Decimal, fee_percent: Decimal):
+        gross_q = cls._q(gross)
+        fee_amt = cls._q(gross_q * (fee_percent / Decimal("100")))
+        net = cls._q(gross_q - fee_amt)
+        if net < Decimal("0.00"):
+            net = Decimal("0.00")
+        return gross_q, fee_amt, net
+
+    def mark_scheduled(self, when=None):
+        self.status = self.STATUS_SCHEDULED
+        self.scheduled_at = when or timezone.now()
+        self.save(update_fields=["status", "scheduled_at", "updated_at"])
+
+    def mark_paid(self):
+        self.status = self.STATUS_PAID
+        self.paid_at = timezone.now()
+        self.save(update_fields=["status", "paid_at", "updated_at"])
+
+    def mark_failed(self):
+        self.status = self.STATUS_FAILED
+        self.save(update_fields=["status", "updated_at"])

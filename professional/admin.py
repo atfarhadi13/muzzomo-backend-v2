@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 from .models import (
+    BankInfo,
     Professional,
     ProfessionalService,
     ProfessionalInsurance,
@@ -30,7 +31,6 @@ class ProfessionalAdmin(admin.ModelAdmin):
             return "-"
         return f"{obj.average_rating:.2f} ⭐"
 
-    # Hide sensitive fields from admin forms
     def get_readonly_fields(self, request, obj=None):
         readonly = list(super().get_readonly_fields(request, obj))
         readonly.extend(['license_number', 'verification_status'])
@@ -121,3 +121,48 @@ class ProfessionalPayoutAdmin(admin.ModelAdmin):
     @admin.display(description="Professional")
     def professional_email(self, obj):
         return obj.professional.user.email
+
+@admin.register(BankInfo)
+class BankInfoAdmin(admin.ModelAdmin):
+    list_display = (
+        "professional",
+        "institution_name",
+        "institution_number",
+        "transit_number",
+        "account_last4",
+        "updated_at",
+    )
+    list_select_related = ("professional",)
+    list_filter = ("institution_name",)
+    search_fields = (
+        "professional__id",
+        "professional__user__email",
+        "professional__user__first_name",
+        "professional__user__last_name",
+        "institution_name",
+        "institution_number",
+        "transit_number",
+        "account_number",
+    )
+    readonly_fields = ("masked_account_number", "account_last4", "created_at", "updated_at")
+    fieldsets = (
+        (None, {
+            "fields": ("professional",)
+        }),
+        ("Bank details", {
+            "fields": (
+                "institution_name",
+                "institution_number",
+                "transit_number",
+                "account_number",
+                "account_holder_name",
+            )
+        }),
+        ("Computed", {
+            "fields": ("masked_account_number", "account_last4")
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at")
+        }),
+    )
+
