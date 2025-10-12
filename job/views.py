@@ -3,7 +3,7 @@ import re
 import stripe
 
 from datetime import datetime, date, time
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction, IntegrityError
@@ -15,7 +15,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 
 from job.serializers import ( 
     JobCreateSerializer, JobRateSerializer, 
@@ -30,7 +29,7 @@ from job.models import (
     Job, JobServiceType, JobAttachment, 
     JobOffer, JobStatus, JobRate,
     JobUnitUpdateRequest, JobUnitUpdateRequestStatus,
-    JobOfferStatus
+    JobOfferStatus, ProfessionalPayout
 )
 
 from professional.models import Professional, ProfessionalService
@@ -40,6 +39,27 @@ from service.models import ServiceType
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # ---------- Shared helpers ----------
+
+FEE_DEFAULT = Decimal("20.00")
+FEE_PRO = Decimal("15.00")
+FEE_ENTERPRISE = Decimal("10.00")
+
+
+def _q(v: Decimal) -> Decimal:
+    return (v or Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _fee_percent_for_professional(professional) -> Decimal:
+    user = getattr(professional, "user", None)
+    us = getattr(user, "professional_subscription", None)
+    if not us or not us.active or not us.plan or not us.plan.name:
+        return FEE_DEFAULT
+    name = us.plan.name.strip().lower()
+    if name == "pro plan":
+        return FEE_PRO
+    if name == "enterprise plan":
+        return FEE_ENTERPRISE
+    return FEE_DEFAULT
 
 def _decimal(val, field_name="value"):
     try:
@@ -203,7 +223,6 @@ class JobCreateView(generics.CreateAPIView):
             JobOffer.objects.bulk_create([JobOffer(job=job, professional=pro) for pro in available_pros])
             return available_pros.count()
         except Exception:
-            # Offers failing should not break job creation
             return 0
 
     @transaction.atomic
@@ -212,24 +231,19 @@ class JobCreateView(generics.CreateAPIView):
         user = request.user
 
         try:
-            # Address payload (supports JSON body or multipart form keys)
             address_payload = data.get("address")
             addr_payload = address_payload if isinstance(address_payload, dict) else (self._extract_address_from_form(data) or {})
 
-            # Service types (supports JSON array or indexed form keys)
             st_inputs = data.get("job_service_types")
             if not isinstance(st_inputs, list):
                 st_inputs = self._extract_service_types_from_form(data) or []
 
-            # Schedule
             start_date = data.get("start_date")
             start_time = data.get("start_time")
 
-            # Resolve address to ID for serializer
             address = self._resolve_address(user, addr_payload)
             data["address"] = address.id
 
-            # Validate and create job
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
             job = serializer.save(
@@ -237,14 +251,11 @@ class JobCreateView(generics.CreateAPIView):
                 start_at=self._make_start_at(start_date, start_time),
             )
 
-            # Attach service types
             if st_inputs:
                 st_ids = [int(x["service_type_id"]) for x in st_inputs]
                 JobServiceType.objects.bulk_create(
                     [JobServiceType(job=job, service_type_id=st_id) for st_id in st_ids]
                 )
-
-            # Attach files (ignore single file errors so one bad file doesn’t kill the request)
             file_list = request.FILES.getlist("job_attachments") if hasattr(request.FILES, "getlist") else []
             for f in file_list:
                 try:
@@ -252,7 +263,6 @@ class JobCreateView(generics.CreateAPIView):
                 except Exception:
                     continue
 
-            # Fire offers (best-effort)
             offer_count = self._create_job_offers(job)
 
             return Response(
@@ -460,7 +470,6 @@ class JobUpdateView(generics.UpdateAPIView):
                         [JobServiceType(job=job, service_type_id=int(st["service_type_id"])) for st in st_inputs]
                     )
 
-            # Replace attachments only if new ones are provided
             if hasattr(request.FILES, "getlist"):
                 file_list = request.FILES.getlist("job_attachments")
                 if file_list:
@@ -506,7 +515,6 @@ class JobDeleteView(generics.DestroyAPIView):
         return Job.objects.filter(user=self.request.user)
 
     def perform_destroy(self, instance):
-        # Delete attachments defensively
         for att in list(instance.attachments.all()):
             try:
                 storage = att.attachment.storage
@@ -551,7 +559,6 @@ class JobListView(generics.ListAPIView):
             "job_service_types__service_type",
         )
 
-        # status
         status_param = self.request.query_params.get("status")
         if status_param:
             statuses = [s.strip() for s in status_param.split(",") if s.strip()]
@@ -559,24 +566,20 @@ class JobListView(generics.ListAPIView):
             statuses = [s for s in statuses if s in valid]
             qs = qs.filter(status__in=statuses) if statuses else qs.none()
 
-        # service
         service_id = self.request.query_params.get("service")
         if service_id and str(service_id).isdigit():
             qs = qs.filter(service_id=int(service_id))
 
-        # service types
         st_param = self.request.query_params.get("service_types")
         if st_param:
             st_ids = [int(x) for x in st_param.split(",") if x.strip().isdigit()]
             if st_ids:
                 qs = qs.filter(job_service_types__service_type_id__in=st_ids)
 
-        # city
         city_name = self.request.query_params.get("city")
         if city_name:
             qs = qs.filter(address__city__name__iexact=city_name)
 
-        # province
         province_param = self.request.query_params.get("province")
         if province_param:
             qs = qs.filter(
@@ -584,7 +587,6 @@ class JobListView(generics.ListAPIView):
                 Q(address__city__province__name__iexact=province_param)
             )
 
-        # is_paid
         is_paid_param = self.request.query_params.get("is_paid")
         tf = _is_truthy(is_paid_param)
         if tf is True:
@@ -592,7 +594,6 @@ class JobListView(generics.ListAPIView):
         elif tf is False:
             qs = qs.filter(is_paid=False)
 
-        # ordering
         ordering = self.request.query_params.get("ordering")
         if ordering in {"created_at", "-created_at", "start_at", "-start_at", "total_price", "-total_price"}:
             qs = qs.order_by(ordering)
@@ -635,11 +636,9 @@ class PaymentSheetView(APIView):
             return Response({"detail": "Job not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            # Ensure total matches latest service * quantity before computing outstanding
             computed_total = job.computed_total_price
             if job.total_price != computed_total:
                 job.total_price = computed_total
-                # model.save() recalculates is_paid; include is_paid in update_fields is optional
                 job.save(update_fields=["total_price", "updated_at"])
 
             remaining = job.outstanding_amount
@@ -657,7 +656,7 @@ class PaymentSheetView(APIView):
                 customer=customer["id"],
                 automatic_payment_methods={"enabled": True},
                 metadata={"job_id": job.id},
-                idempotency_key=f"job:{job.id}:remaining:{amount_cents}"  # <- add
+                idempotency_key=f"job:{job.id}:remaining:{amount_cents}"
             )
 
             return Response(
@@ -686,6 +685,7 @@ class PaymentSheetView(APIView):
 class PaymentSuccess(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request):
         payment_intent_id = request.data.get("payment_intent_id")
         job_id = request.data.get("job_id")
@@ -696,10 +696,11 @@ class PaymentSuccess(APIView):
                 {"error": "payment_intent_id, job_id, and amount_paid are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         if not request.user.is_provider:
             return Response({"detail": "Only providers can confirm payment."}, status=status.HTTP_403_FORBIDDEN)
 
-        job = get_object_or_404(Job, id=job_id, user=request.user)
+        job = get_object_or_404(Job.objects.select_for_update(), id=job_id, user=request.user)
 
         try:
             amt = Decimal(str(amount_paid)).quantize(Decimal("0.01"))
@@ -709,17 +710,16 @@ class PaymentSuccess(APIView):
             return Response({"error": "amount_paid cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Refresh total before applying payment in case quantity/service changed
             computed_total = job.computed_total_price
+            update_fields = ["stripe_session_id", "updated_at"]
             if job.total_price != computed_total:
                 job.total_price = computed_total
-                job.save(update_fields=["total_price", "updated_at"])
+                update_fields.append("total_price")
 
             current = (job.paid_amount or Decimal("0.00")).quantize(Decimal("0.01"))
             expected = (job.total_price or Decimal("0.00")).quantize(Decimal("0.01"))
             remaining = (expected - current)
             if remaining <= 0:
-                # Already fully paid; idempotent success response
                 return Response(
                     {
                         "message": "Already fully paid.",
@@ -728,7 +728,7 @@ class PaymentSuccess(APIView):
                         "submitted_amount": str(amt),
                         "total_expected": str(expected),
                         "total_paid": str(current),
-                        "is_fully_paid": True,
+                        "is_fully_paid": job.is_paid,
                         "paid_units": str(job.paid_units),
                         "remaining_units": str(job.remaining_units),
                         "outstanding_amount": "0.00",
@@ -737,12 +737,13 @@ class PaymentSuccess(APIView):
                     status=status.HTTP_200_OK,
                 )
 
-            applied = min(max(remaining, Decimal("0.00")), amt)
-
+            applied = min(amt, remaining).quantize(Decimal("0.01"))
             job.paid_amount = (current + applied).quantize(Decimal("0.01"))
             job.stripe_session_id = str(payment_intent_id)
-            # model.save() recomputes is_paid
-            job.save(update_fields=["paid_amount", "stripe_session_id", "updated_at"])
+
+            update_fields.extend(["paid_amount", "is_paid"])
+
+            job.save(update_fields=update_fields)
 
             return Response(
                 {
@@ -760,6 +761,7 @@ class PaymentSuccess(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
+
         except (InvalidOperation, ValueError) as e:
             return Response({"error": "Invalid numeric computation.", "detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -907,7 +909,6 @@ class JobOfferListView(generics.ListAPIView):
     def get_queryset(self):
         prof = getattr(self.request.user, "professional_profile", None)
         if not prof:
-            # No professional profile => no access
             return JobOffer.objects.none()
 
         qs = (
@@ -952,7 +953,7 @@ class JobOfferAcceptView(APIView):
             return Response({"detail": "Offer cannot be accepted for this job status."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            offer.accept()  # assumes your model method handles assignment & state updates atomically
+            offer.accept()
         except IntegrityError as e:
             transaction.set_rollback(True)
             return Response({"detail": "Database error accepting offer.", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1081,7 +1082,6 @@ class JobAttachmentListView(generics.ListAPIView):
             job.professional_id == getattr(self.request.user.professional_profile, "id", None)
         )
         if not (is_owner or is_assigned_pro):
-            # Explicitly deny instead of silently returning none
             raise PermissionError("Not allowed to view this job's attachments.")
 
         return JobAttachment.objects.filter(job=job).order_by("-uploaded_at")
@@ -1165,8 +1165,6 @@ class JobCompleteView(APIView):
             return Response({"detail": "Job has no assigned professional."}, status=status.HTTP_400_BAD_REQUEST)
         if job.status != JobStatus.IN_PROGRESS:
             return Response({"detail": "Only in-progress jobs can be completed."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Payment gate
         if job.outstanding_amount > Decimal("0.00"):
             return Response(
                 {
@@ -1189,6 +1187,38 @@ class JobCompleteView(APIView):
             transaction.set_rollback(True)
             return Response({"detail": "Database error.", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        fee_percent = _fee_percent_for_professional(job.professional)
+        gross = _q(job.total_price)
+        fee_amount = _q(gross * (fee_percent / Decimal("100")))
+        net_amount = _q(gross - fee_amount)
+        if net_amount < Decimal("0.00"):
+            net_amount = Decimal("0.00")
+
+        bi = getattr(job.professional, "bank_info", None)
+        dest_snapshot = {
+            "dest_institution_name": getattr(bi, "institution_name", None),
+            "dest_institution_number": getattr(bi, "institution_number", None),
+            "dest_transit_number": getattr(bi, "transit_number", None),
+            "dest_account_last4": (getattr(bi, "account_number", "")[-4:] if getattr(bi, "account_number", None) else None),
+            "dest_account_holder_name": getattr(bi, "account_holder_name", None),
+        }
+
+        payout_defaults = {
+            "professional": job.professional,
+            "currency": getattr(job, "currency", getattr(ProfessionalPayout, "currency", "USD")) if hasattr(job, "currency") else "USD",
+            "gross_amount": gross,
+            "fee_percent_applied": fee_percent,
+            "fee_amount": fee_amount,
+            "net_amount": net_amount,
+            **dest_snapshot,
+        }
+
+        payout, created = ProfessionalPayout.objects.get_or_create(job=job, defaults=payout_defaults)
+        if not created:
+            for k, v in payout_defaults.items():
+                setattr(payout, k, v)
+            payout.save()
+
         return Response(
             {
                 "id": job.id,
@@ -1197,6 +1227,19 @@ class JobCompleteView(APIView):
                 "total_price": str(job.total_price),
                 "paid_amount": str(job.paid_amount),
                 "outstanding_amount": str(job.outstanding_amount),
+                "payout": {
+                    "payout_id": payout.id,
+                    "gross_amount": str(payout.gross_amount),
+                    "fee_percent_applied": str(payout.fee_percent_applied),
+                    "fee_amount": str(payout.fee_amount),
+                    "net_amount": str(payout.net_amount),
+                    "status": payout.status,
+                    "dest_institution_name": payout.dest_institution_name,
+                    "dest_institution_number": payout.dest_institution_number,
+                    "dest_transit_number": payout.dest_transit_number,
+                    "dest_account_last4": payout.dest_account_last4,
+                    "dest_account_holder_name": payout.dest_account_holder_name,
+                },
             },
             status=status.HTTP_200_OK,
         )
