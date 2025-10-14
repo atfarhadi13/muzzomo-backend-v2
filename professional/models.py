@@ -10,17 +10,20 @@ from django.utils import timezone
 
 from service.models import Service
 
+
 def validate_file_size(file, max_size=5 * 1024 * 1024):
     if file.size > max_size:
         raise ValidationError(f"File size cannot exceed {max_size / (1024 * 1024)}MB. Current size: {file.size / (1024 * 1024):.2f} MB.")
+
 
 def validate_file_format(file):
     valid_formats = ['application/pdf', 'image/jpeg', 'image/png']
     if file.content_type not in valid_formats:
         raise ValidationError("File must be a PDF, JPG, JPEG, or PNG.")
 
-phone_validator = RegexValidator(r'^\+?\d{7,15}$', 'Enter a valid phone number (7–15 digits, optional leading "+").')
+
 digits_only = RegexValidator(r'^\d+$', 'Digits only.')
+
 
 class Professional(models.Model):
     class VerificationStatus(models.TextChoices):
@@ -91,7 +94,7 @@ class Professional(models.Model):
                     user.is_provider = False
                     user.save(update_fields=['is_professional', 'is_provider'])
             return res
-        
+
     def update_rating_cache(self):
         agg = self.ratings.aggregate(avg=Avg("rating"), cnt=Count("id"))
         avg = agg["avg"]
@@ -99,6 +102,21 @@ class Professional(models.Model):
         self.rating_avg = round(Decimal(avg), 2) if avg is not None else None
         self.rating_count = cnt
         self.save(update_fields=["rating_avg", "rating_count"])
+
+    def registration_completion_percent(self) -> int:
+        total = 3
+        score = 0
+        if self.services.exists():
+            score += 1
+        if self.trades.exists():
+            score += 1
+        if hasattr(self, "insurance"):
+            score += 1
+        return int(round((score / total) * 100))
+    
+    @property
+    def registration_completion(self) -> int:
+        return self.registration_completion_percent()
 
     def delete(self, *args, **kwargs):
         storage = self.certification.storage if self.certification else None
@@ -115,6 +133,7 @@ class Professional(models.Model):
             storage.delete(name)
         return res
 
+
 class ProfessionalService(models.Model):
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='professional_services')
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='services')
@@ -130,6 +149,7 @@ class ProfessionalService(models.Model):
 
     def __str__(self):
         return f"{self.professional.user.email} - {self.service.title}"
+
 
 class ProfessionalInsurance(models.Model):
     professional = models.OneToOneField(Professional, on_delete=models.CASCADE, related_name='insurance')
@@ -188,67 +208,6 @@ class ProfessionalTrade(models.Model):
             storage.delete(name)
 
 
-class ProfessionalInventory(models.Model):
-    professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='inventories')
-    item_name = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0'))])
-    unit = models.CharField(max_length=50, blank=True, null=True)
-    date_added = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-date_added']
-        constraints = [
-            models.CheckConstraint(check=Q(quantity__gte=Decimal('0')), name='chk_inventory_qty_gte_zero'),
-        ]
-        indexes = [
-            models.Index(fields=['item_name']),
-            models.Index(fields=['professional']),
-        ]
-
-    def __str__(self):
-        unit_display = f" {self.unit}" if self.unit else ""
-        return f"{self.item_name} ({self.quantity}{unit_display}) - {self.professional.user.email}"
-
-
-class ProfessionalTaskStatus(models.TextChoices):
-    PENDING = 'pending', 'Pending'
-    IN_PROGRESS = 'in_progress', 'In Progress'
-    COMPLETED = 'completed', 'Completed'
-
-
-class ProfessionalTask(models.Model):
-    professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='tasks')
-    worker_name = models.CharField(max_length=255)
-    worker_phone = models.CharField(max_length=20, blank=True, null=True, validators=[phone_validator])
-    worker_email = models.EmailField(blank=True, null=True)
-    start_date = models.DateField()
-    start_time = models.TimeField()
-    end_time = models.TimeField(blank=True, null=True)
-    price_per_hour = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0'))])
-    description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=ProfessionalTaskStatus.choices, default=ProfessionalTaskStatus.PENDING)
-    date_created = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-date_created']
-        indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['professional']),
-            models.Index(fields=['start_date']),
-        ]
-        constraints = [
-            models.CheckConstraint(check=Q(price_per_hour__gte=Decimal('0')), name='chk_task_price_gte_zero'),
-        ]
-
-    def __str__(self):
-        return f"Task for {self.worker_name} on {self.start_date}"
-
-    def clean(self):
-        super().clean()
-        if self.end_time and self.end_time <= self.start_time:
-            raise ValidationError({'end_time': 'End time must be after start time.'})
-
 class ProfessionalRating(models.Model):
     professional = models.ForeignKey(Professional, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='professional_ratings')
@@ -288,6 +247,7 @@ class ProfessionalRating(models.Model):
         super().delete(*args, **kwargs)
         pro.update_rating_cache()
 
+
 class ProfessionalPayout(models.Model):
     professional = models.OneToOneField(
         Professional,
@@ -304,6 +264,7 @@ class ProfessionalPayout(models.Model):
 
     def __str__(self):
         return f"Payout info for {self.professional.user.email}"
+
 
 class BankInfo(models.Model):
     professional = models.OneToOneField(

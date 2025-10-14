@@ -1,93 +1,116 @@
+### Inventory/professional.http (REST Client collection)
+
 @base = http://localhost:8000
-# If your app is mounted at /professional/, keep prefix; else set to just /api
 @prefix = /professional/api
 
 @token = <PUT_YOUR_JWT_ACCESS_TOKEN_HERE>
 @pro_id = 12
+@professional_service_id = 5
 @service_id = 1
 @trade_id = 1
-@inventory_id = 1
-@task_id = 1
 @rating_id = 1
 @payout_id = 1
 @bankinfo_id = 1
 
-###
-# Professional — Create
+########################################################
+# PROFESSIONAL (CRUD) + rating actions
+########################################################
+
+### Create Professional (JSON; omit certification or use multipart below)
 POST {{base}}{{prefix}}/professionals/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "license_number": "LIC-12345",
-  "government_issued_id": "driver_license",
-  "certification": "Red Seal"
+  "government_issued_id": "driver_license"
 }
 
-###
-# Professional — Me (singleton)
-GET {{base}}{{prefix}}/professionals/me/
+### Create Professional with certification (multipart)
+POST {{base}}{{prefix}}/professionals/
 Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=BOUNDARY
 
-###
-# Professional — Retrieve
+--BOUNDARY
+Content-Disposition: form-data; name="license_number"
+
+LIC-12345
+--BOUNDARY
+Content-Disposition: form-data; name="government_issued_id"
+
+driver_license
+--BOUNDARY
+Content-Disposition: form-data; name="certification"; filename="cert.pdf"
+Content-Type: application/pdf
+
+< ./cert.pdf
+--BOUNDARY--
+
+### Retrieve Professional
 GET {{base}}{{prefix}}/professionals/{{pro_id}}/
 Authorization: Bearer {{token}}
 
-###
-# Professional — Update (PATCH)
+### Update Professional (PATCH)
 PATCH {{base}}{{prefix}}/professionals/{{pro_id}}/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "license_number": "LIC-99999" }
 
-###
-# Professional — Delete
+### Delete Professional
 DELETE {{base}}{{prefix}}/professionals/{{pro_id}}/
 Authorization: Bearer {{token}}
 
+### Rate a Professional (create/update your rating)
+POST {{base}}{{prefix}}/professionals/{{pro_id}}/rate/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "rating": 5, "review": "Excellent service!" }
+
+### List all ratings for a Professional
+GET {{base}}{{prefix}}/professionals/{{pro_id}}/ratings/
+Authorization: Bearer {{token}}
+
+### Get my rating for a Professional
+GET {{base}}{{prefix}}/professionals/{{pro_id}}/my-rating/
+Authorization: Bearer {{token}}
+
 ########################################################
-# Professional Services
+# PROFESSIONAL SERVICES (CRUD)
 ########################################################
 
-###
-# Create Professional Service (attach a Service to me)
+### Create Professional Service (attach a Service to me)
 POST {{base}}{{prefix}}/professional-services/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "service": {{service_id}} }
 
-###
-# List My Professional Services
+### List My Professional Services
 GET {{base}}{{prefix}}/professional-services/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve Professional Service
-GET {{base}}{{prefix}}/professional-services/{{service_id}}/
+### Retrieve Professional Service (use the professional_service_id, not service_id)
+GET {{base}}{{prefix}}/professional-services/{{professional_service_id}}/
 Authorization: Bearer {{token}}
 
-###
-# Update Professional Service
-PATCH {{base}}{{prefix}}/professional-services/{{service_id}}/
+### Update Professional Service
+PATCH {{base}}{{prefix}}/professional-services/{{professional_service_id}}/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "service": {{service_id}} }
 
-###
-# Delete Professional Service
-DELETE {{base}}{{prefix}}/professional-services/{{service_id}}/
+### Delete Professional Service
+DELETE {{base}}{{prefix}}/professional-services/{{professional_service_id}}/
 Authorization: Bearer {{token}}
 
 ########################################################
-# Professional Insurance (singleton per professional)
+# PROFESSIONAL INSURANCE (singleton per professional)
 ########################################################
 
-###
-# Create / Upload Insurance (multipart)
+### Create / Upload Insurance (multipart)
 POST {{base}}{{prefix}}/professional-insurance/
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=BOUNDARY
@@ -111,40 +134,34 @@ Content-Type: application/pdf
 < ./policy.pdf
 --BOUNDARY--
 
-###
-# Get My Insurance
+### Get My Insurance
 GET {{base}}{{prefix}}/professional-insurance/me/
 Authorization: Bearer {{token}}
 
-###
-# List Insurance (me; staff sees all)
+### List Insurance (scoped to me; staff sees all)
 GET {{base}}{{prefix}}/professional-insurance/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve Insurance
+### Retrieve Insurance by id
 GET {{base}}{{prefix}}/professional-insurance/1/
 Authorization: Bearer {{token}}
 
-###
-# Update Insurance
+### Update Insurance
 PATCH {{base}}{{prefix}}/professional-insurance/1/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "insurance_provider_name": "XYZ Insurance" }
 
-###
-# Delete Insurance
+### Delete Insurance
 DELETE {{base}}{{prefix}}/professional-insurance/1/
 Authorization: Bearer {{token}}
 
 ########################################################
-# Professional Trades (many)
+# PROFESSIONAL TRADES (CRUD)
 ########################################################
 
-###
-# Create Trade (multipart)
+### Create Trade (multipart)
 POST {{base}}{{prefix}}/professional-trades/
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=BOUNDARY
@@ -164,178 +181,82 @@ Content-Type: application/pdf
 < ./trade.pdf
 --BOUNDARY--
 
-###
-# List My Trades (shortcut)
+### List My Trades (shortcut)
 GET {{base}}{{prefix}}/professional-trades/mine/
 Authorization: Bearer {{token}}
 
-###
-# List Trades (scoped to me; staff sees all)
+### List Trades (scoped to me; staff sees all)
 GET {{base}}{{prefix}}/professional-trades/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve Trade
+### Retrieve Trade
 GET {{base}}{{prefix}}/professional-trades/{{trade_id}}/
 Authorization: Bearer {{token}}
 
-###
-# Update Trade
+### Update Trade
 PATCH {{base}}{{prefix}}/professional-trades/{{trade_id}}/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "trade_license_number": "TL-2025-0099" }
 
-###
-# Delete Trade
+### Delete Trade
 DELETE {{base}}{{prefix}}/professional-trades/{{trade_id}}/
 Authorization: Bearer {{token}}
 
 ########################################################
-# Professional Inventory (many)
+# PROFESSIONAL RATINGS (READ-ONLY LIST/RETRIEVE)
 ########################################################
 
-###
-# Create Inventory Item
-POST {{base}}{{prefix}}/professional-inventories/
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "item_name": "Hammer",
-  "description": "A sturdy hammer",
-  "quantity": 10.00,
-  "unit": "pieces"
-}
-
-###
-# List My Inventory
-GET {{base}}{{prefix}}/professional-inventories/
-Authorization: Bearer {{token}}
-
-###
-# Retrieve Inventory Item
-GET {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
-Authorization: Bearer {{token}}
-
-###
-# Update Inventory Item
-PATCH {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{ "quantity": 15.00 }
-
-###
-# Delete Inventory Item
-DELETE {{base}}{{prefix}}/professional-inventories/{{inventory_id}}/
-Authorization: Bearer {{token}}
-
-########################################################
-# Professional Tasks (many)
-########################################################
-
-###
-# Create Task
-POST {{base}}{{prefix}}/professional-tasks/
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "worker_name": "John Doe",
-  "worker_phone": "+1234567890",
-  "worker_email": "john@example.com",
-  "start_date": "2025-12-01",
-  "start_time": "09:00:00",
-  "end_time": "17:00:00",
-  "price_per_hour": 25.00,
-  "description": "Painting job",
-  "status": "pending"
-}
-
-###
-# List My Tasks
-GET {{base}}{{prefix}}/professional-tasks/
-Authorization: Bearer {{token}}
-
-###
-# Retrieve Task
-GET {{base}}{{prefix}}/professional-tasks/{{task_id}}/
-Authorization: Bearer {{token}}
-
-###
-# Update Task
-PATCH {{base}}{{prefix}}/professional-tasks/{{task_id}}/
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{ "status": "completed" }
-
-###
-# Delete Task
-DELETE {{base}}{{prefix}}/professional-tasks/{{task_id}}/
-Authorization: Bearer {{token}}
-
-########################################################
-# Professional Ratings (many)
-########################################################
-
-###
-# Create Rating
-POST {{base}}{{prefix}}/professional-ratings/
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "user": 1,
-  "rating": 5,
-  "review": "Excellent service!"
-}
-
-###
-# List My Ratings
+### List my ratings (as rater) OR use ?professional={id} to see a pro's ratings
 GET {{base}}{{prefix}}/professional-ratings/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve Rating
+### Retrieve a single rating
 GET {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
 Authorization: Bearer {{token}}
 
-###
-# Update Rating
-PATCH {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
+########################################################
+# PROFESSIONAL PAYOUTS (ModelViewSet — create allowed in code)
+########################################################
+
+### Create my payout record (if appropriate in your flow)
+POST {{base}}{{prefix}}/professional-payouts/
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
-{ "rating": 4 }
+{
+  "stripe_account_id": "acct_1Example",
+  "payouts_enabled": false,
+  "onboarding_complete": false
+}
 
-###
-# Delete Rating
-DELETE {{base}}{{prefix}}/professional-ratings/{{rating_id}}/
-Authorization: Bearer {{token}}
-
-########################################################
-# Professional Payouts (read-only for pros in your setup)
-########################################################
-
-###
-# List My Payouts
+### List My Payouts
 GET {{base}}{{prefix}}/professional-payouts/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve Payout
+### Retrieve Payout
 GET {{base}}{{prefix}}/professional-payouts/{{payout_id}}/
 Authorization: Bearer {{token}}
 
+### Update Payout
+PATCH {{base}}{{prefix}}/professional-payouts/{{payout_id}}/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "payouts_enabled": true
+}
+
+### Delete Payout
+DELETE {{base}}{{prefix}}/professional-payouts/{{payout_id}}/
+Authorization: Bearer {{token}}
+
 ########################################################
-# Bank Info (singleton per professional)
+# BANK INFO (singleton upsert via POST; CRUD via id)
 ########################################################
 
-###
-# Upsert Bank Info (create if missing, update if exists)
+### Upsert Bank Info (POST will create or update for current professional)
 POST {{base}}{{prefix}}/bank-info/
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -348,23 +269,19 @@ Content-Type: application/json
   "account_holder_name": "Jane Doe"
 }
 
-###
-# Get My Bank Info (singleton)
+### Get My Bank Info (singleton)
 GET {{base}}{{prefix}}/bank-info/me/
 Authorization: Bearer {{token}}
 
-###
-# List (scoped to me; usually single)
+### List (scoped to me; usually single)
 GET {{base}}{{prefix}}/bank-info/
 Authorization: Bearer {{token}}
 
-###
-# Retrieve (by id)
+### Retrieve (by id)
 GET {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
 Authorization: Bearer {{token}}
 
-###
-# Update (PATCH)
+### Update (PATCH)
 PATCH {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -374,7 +291,6 @@ Content-Type: application/json
   "account_number": "999888777666"
 }
 
-###
-# Delete (if enabled)
+### Delete
 DELETE {{base}}{{prefix}}/bank-info/{{bankinfo_id}}/
 Authorization: Bearer {{token}}
