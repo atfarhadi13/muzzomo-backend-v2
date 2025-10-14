@@ -56,10 +56,24 @@ TEMPLATES = [{
 WSGI_APPLICATION = "core.wsgi.application"
 
 REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_CLASSES": [
+    "rest_framework.throttling.AnonRateThrottle",
+    "rest_framework.throttling.UserRateThrottle",
+    "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "20/min",
+        "user": "60/min",
+        "login": "10/min",
+        "otp": "6/min",
+        "register": "6/min",
+    },
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
+
+    "EXCEPTION_HANDLER": "user.exceptions.custom_exception_handler",
 }
 
 SIMPLE_JWT = {

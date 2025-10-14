@@ -20,14 +20,14 @@ phone_validator = RegexValidator(
 )
 
 def validate_image_size(image):
-    max_size = 2 * 1024 * 1024
+    max_size = 5 * 1024 * 1024
     if image.size > max_size:
-        raise ValidationError(f"Profile image cannot be larger than 2MB. Current size: {image.size / (1024 * 1024):.2f} MB.")
-
+        raise ValidationError(f"Profile image cannot be larger than 5MB. Current size: {image.size / (1024 * 1024):.2f} MB.")
+    
 def validate_image_format(image):
-    valid_formats = ['image/png', 'image/jpeg']
+    valid_formats = ['image/png', 'image/jpeg', 'image/webp']
     if image.content_type not in valid_formats:
-        raise ValidationError("Profile image must be a PNG, JPG, or JPEG file.")
+        raise ValidationError("Profile image must be PNG, JPG, JPEG, or WEBP.")
 
 def profile_image_upload_to(instance, filename):
     current_date = datetime.now()
@@ -61,7 +61,7 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     first_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
     last_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
     phone_number = models.CharField(max_length=20, blank=True, null=True, validators=[phone_validator])
@@ -77,6 +77,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
 
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+
+    failed_login_attempts = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    last_login_failure = models.DateTimeField(null=True, blank=True)
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
@@ -84,9 +90,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         ordering = ['email']
-        constraints = [
-            models.UniqueConstraint(Lower('email'), name='uniq_user_email_ci'),
-        ]
+        constraints = [models.UniqueConstraint(Lower('email'), name='uniq_user_email_ci')]
         indexes = [
             models.Index(fields=['is_active', 'is_verified']),
             models.Index(Lower('email'), name='idx_user_email_ci'),
@@ -97,8 +101,35 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             self.email = self.email.lower()
         super().save(*args, **kwargs)
 
+    def clean(self):
+        super().clean()
+        if self.email:
+            self.email = self.email.lower()
+
     def __str__(self):
         return self.email
+    
+    @property
+    def is_locked(self) -> bool:
+        return bool(self.locked_until and timezone.now() < self.locked_until)
+    
+    @property
+    def full_name(self):
+        return f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip() or None
+
+    def register_failed_login(self, threshold=5, lock_minutes=15):
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
+        self.last_login_failure = timezone.now()
+        if self.failed_login_attempts >= threshold:
+            self.locked_until = timezone.now() + timedelta(minutes=lock_minutes)
+        self.save(update_fields=["failed_login_attempts", "last_login_failure", "locked_until"])
+
+    def reset_login_failures(self):
+        if self.failed_login_attempts or self.locked_until or self.last_login_failure:
+            self.failed_login_attempts = 0
+            self.locked_until = None
+            self.last_login_failure = None
+            self.save(update_fields=["failed_login_attempts", "locked_until", "last_login_failure"])
 
 class OneTimeCodeQuerySet(models.QuerySet):
     def active(self):
@@ -109,11 +140,13 @@ class OneTimeCode(models.Model):
     PURPOSE_LOGIN = 'login_otp'
     PURPOSE_RESET = 'password_reset'
     PURPOSE_EMAIL = 'email_update'
+    PURPOSE_UNLOCK = 'account_unlock'
 
     PURPOSE_CHOICES = [
         (PURPOSE_LOGIN, 'Login OTP'),
         (PURPOSE_RESET, 'Password Reset'),
         (PURPOSE_EMAIL, 'Email Update'),
+        (PURPOSE_UNLOCK, 'Account Unlock'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='one_time_codes')
@@ -123,6 +156,9 @@ class OneTimeCode(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True, blank=True)
+
+    verify_attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
 
     objects = OneTimeCodeQuerySet.as_manager()
 
@@ -150,6 +186,12 @@ class OneTimeCode(models.Model):
 
     @classmethod
     def _default_ttl(cls, purpose):
+        if purpose == cls.PURPOSE_RESET:
+            return timedelta(minutes=15)
+        if purpose == cls.PURPOSE_EMAIL:
+            return timedelta(minutes=30)
+        if purpose == cls.PURPOSE_UNLOCK:
+            return timedelta(minutes=10)
         return timedelta(minutes=10)
 
     @classmethod
@@ -220,8 +262,13 @@ class OneTimeCode(models.Model):
             code = cls.objects.select_for_update().active().filter(user=user, purpose=purpose).first()
             if not code:
                 return False
-            if not check_password(raw_code, code.code_hash):
+            if code.verify_attempts >= code.max_attempts:
+                code.used_at = timezone.now()
+                code.save(update_fields=["verify_attempts", "used_at"])
                 return False
-            code.used_at = timezone.now()
-            code.save(update_fields=['used_at'])
-            return True
+            ok = check_password(raw_code, code.code_hash)
+            code.verify_attempts += 1
+            if ok:
+                code.used_at = timezone.now()
+            code.save(update_fields=["verify_attempts", "used_at"])
+            return ok

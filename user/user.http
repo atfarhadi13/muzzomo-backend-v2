@@ -6,9 +6,10 @@
 @new_password = EvenStrongerPass1!
 @new_email = new.address@example.com
 @otp = 123456
+@revoke_jti = <PUT_JWT_JTI_TO_REVOKE>
 
 ###
-# Register
+# Register (idempotent for unverified users)
 POST {{base}}/auth/register/
 Content-Type: application/json
 
@@ -28,7 +29,7 @@ Content-Type: application/json
 }
 
 ###
-# Resend OTP (generic verify flow)
+# Resend OTP (verify flow)
 POST {{base}}/auth/resend-otp/
 Content-Type: application/json
 
@@ -87,11 +88,22 @@ Content-Type: application/json
 
 ###
 # Password Reset — Resend OTP
-POST {{base}}/password-reset/resend-otp/
+POST {{base}}/auth/password-reset/resend-otp/
 Content-Type: application/json
 
 {
   "email": "{{email}}"
+}
+
+###
+# Password Change (authenticated)
+POST {{base}}/auth/password/change/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "current_password": "{{password}}",
+  "new_password": "{{new_password}}"
 }
 
 ###
@@ -105,7 +117,7 @@ Content-Type: application/json
 }
 
 ###
-# Email Update — Confirm (verify with OTP)
+# Email Update — Confirm (verify with OTP sent to new email)
 POST {{base}}/auth/email-update/confirm/
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -116,7 +128,7 @@ Content-Type: application/json
 
 ###
 # Email Update — Resend OTP
-POST {{base}}/email-update/resend-otp/
+POST {{base}}/auth/email-update/resend-otp/
 Content-Type: application/json
 
 {
@@ -148,3 +160,47 @@ Content-Type: application/json
   "last_name": "Nasiri",
   "phone_number": "+359888123456"
 }
+
+###
+# Me — Get current user
+GET {{base}}/me/
+Authorization: Bearer {{token}}
+
+###
+# Account — Deactivate
+POST {{base}}/account/deactivate/
+Authorization: Bearer {{token}}
+
+###
+# Sessions — List outstanding refresh tokens
+GET {{base}}/sessions/
+Authorization: Bearer {{token}}
+
+###
+# Sessions — Revoke one refresh token by JTI
+POST {{base}}/sessions/revoke/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "jti": "{{revoke_jti}}"
+}
+
+###
+# OPTIONAL: Account Unlock — Request code (if implemented)
+# POST {{base}}/auth/unlock/request/
+# Content-Type: application/json
+#
+# {
+#   "email": "{{email}}"
+# }
+
+###
+# OPTIONAL: Account Unlock — Confirm code (if implemented)
+# POST {{base}}/auth/unlock/confirm/
+# Content-Type: application/json
+#
+# {
+#   "email": "{{email}}",
+#   "code": "{{otp}}"
+# }

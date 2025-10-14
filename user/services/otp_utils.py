@@ -1,5 +1,8 @@
 from typing import Tuple, Optional
+
 from django.utils import timezone
+from django.core.cache import cache
+
 from ..models import OneTimeCode
 
 def issue_otp(
@@ -22,3 +25,11 @@ def issue_otp(
 
 def is_otp_still_valid(otp_obj: OneTimeCode) -> bool:
     return (otp_obj.used_at is None) and (timezone.now() < otp_obj.expires_at)
+
+def can_resend(user_id, purpose, limit=1, window=60):
+    key = f"otp_resend:{purpose}:{user_id}"
+    count = cache.get(key, 0)
+    if count >= limit: 
+        return False
+    cache.incr(key) if cache.get(key) else cache.set(key, 1, timeout=window)
+    return True
