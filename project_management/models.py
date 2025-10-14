@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.utils.deconstruct import deconstructible
 from django.core.validators import (
     EmailValidator,
     MinLengthValidator,
@@ -13,6 +14,7 @@ from django.core.exceptions import ValidationError
 from professional.models import Professional
 
 
+@deconstructible
 class MaxFileSizeValidator:
     def __init__(self, max_mb: int = 10):
         self.max_mb = max_mb
@@ -21,6 +23,7 @@ class MaxFileSizeValidator:
         if file and hasattr(file, "size") and file.size is not None:
             limit_bytes = self.max_mb * 1024 * 1024
             if file.size > limit_bytes:
+                from django.core.exceptions import ValidationError
                 raise ValidationError(f"File too large. Max size is {self.max_mb} MB.")
 
 
@@ -43,6 +46,7 @@ def validate_mime_type(file):
 
 
 max_10mb = MaxFileSizeValidator(10)
+
 allowed_extensions = FileExtensionValidator(
     allowed_extensions=["pdf", "jpg", "jpeg", "png", "txt"]
 )
@@ -302,9 +306,7 @@ class Task(models.Model):
         validators=[MinLengthValidator(3, "Title must be at least 3 characters.")],
     )
     description = models.TextField(blank=True, default="")
-    project = models.ForeignKey(
-        Project, on_delete=models.CASCADE, related_name="tasks"
-    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
     assignee = models.ForeignKey(
         ProjectMember,
         on_delete=models.SET_NULL,
@@ -314,9 +316,7 @@ class Task(models.Model):
         help_text="Who is responsible for this task.",
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
-    priority = models.CharField(
-        max_length=10, choices=Priority.choices, default=Priority.MEDIUM
-    )
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -327,9 +327,7 @@ class Task(models.Model):
         blank=True,
         related_name="created_tasks",
     )
-    parent_task = models.ForeignKey(
-        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="subtasks"
-    )
+    parent_task = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True, related_name="subtasks")
 
     class Meta:
         ordering = ["-created_at"]
@@ -339,47 +337,11 @@ class Task(models.Model):
             models.Index(fields=["priority"]),
             models.Index(fields=["due_date"]),
         ]
-        constraints = [
-            models.CheckConstraint(
-                name="chk_task_assignee_same_project",
-                check=Q(assignee__isnull=True) | Q(assignee__project=F("project")),
-            ),
-            models.CheckConstraint(
-                name="chk_task_creator_same_project",
-                check=Q(created_by__isnull=True) | Q(created_by__project=F("project")),
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.title} · {self.get_status_display()}"
-
-    @property
-    def is_overdue(self):
-        return bool(
-            self.due_date
-            and self.status != Task.Status.DONE
-            and self.due_date < timezone.now().date()
-        )
-
-    @property
-    def comments_count(self):
-        return self.comments.count()
-
-    @property
-    def attachments_count(self):
-        return self.attachments.count()
-
-    @property
-    def is_subtask(self):
-        return self.parent_task_id is not None
-
-    @property
-    def has_subtasks(self):
-        return self.subtasks.exists()
 
     def clean(self):
         _ensure_pm_access(self.project.owner.user)
         creating = self.pk is None
+
         if self.parent_task and self.parent_task_id == self.id:
             raise ValidationError("A task cannot be its own parent.")
         if self.parent_task and self.parent_task.project_id != self.project_id:
@@ -389,14 +351,16 @@ class Task(models.Model):
             if p.id == self.id:
                 raise ValidationError("Circular parent-child relationship detected.")
             p = p.parent_task
-        if self.due_date and self.status in {
-            Task.Status.TODO,
-            Task.Status.IN_PROGRESS,
-        }:
+
+        if self.assignee and self.assignee.project_id != self.project_id:
+            raise ValidationError({"assignee": "Assignee must belong to the same project."})
+        if self.created_by and self.created_by.project_id != self.project_id:
+            raise ValidationError({"created_by": "Creator must belong to the same project."})
+
+        if self.due_date and self.status in {Task.Status.TODO, Task.Status.IN_PROGRESS}:
             if self.due_date < timezone.now().date():
-                raise ValidationError(
-                    "Due date cannot be in the past for non-done tasks."
-                )
+                raise ValidationError("Due date cannot be in the past for non-done tasks.")
+
         if creating and self.status != Task.Status.DONE:
             _ensure_subscription_allows_task(self.project, adding_active=True)
         if not creating:
@@ -442,17 +406,10 @@ class TaskAttachment(models.Model):
         validators=[max_10mb, allowed_extensions, validate_mime_type],
         help_text="Max 10MB. Allowed: pdf, jpg, jpeg, png, txt.",
     )
-    filename = models.CharField(
-        max_length=255, validators=[MinLengthValidator(1, "Filename is required.")]
-    )
-    file_size = models.PositiveIntegerField(
-        default=0, editable=False, validators=[MinValueValidator(0)]
-    )
+    filename = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField(default=0, editable=False)
     uploaded_by = models.ForeignKey(
-        ProjectMember,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="uploaded_task_attachments",
+        ProjectMember, on_delete=models.SET_NULL, null=True, related_name="uploaded_task_attachments"
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
