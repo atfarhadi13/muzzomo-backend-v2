@@ -12,6 +12,7 @@ urlpatterns = [
     path('professional/', include('professional.urls')),
     path('job/', include('job.urls')),
     path("api/subscriptions/", include("subscription.urls", namespace="subscriptions")),
+    path("api/project_management", include("project_management.urls")),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

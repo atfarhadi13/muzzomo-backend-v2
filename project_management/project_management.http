@@ -1,0 +1,285 @@
+@baseUrl = https://your-domain.com/api
+@token = < YOUR_JWT_ACCESS_TOKEN >
+@json = application/json
+
+### Health check (optional)
+GET {{baseUrl}}/
+Authorization: Bearer {{token}}
+
+############################################################
+# MEMBERS
+############################################################
+
+### List members
+GET {{baseUrl}}/members/
+Authorization: Bearer {{token}}
+
+### Retrieve a member by ID
+GET {{baseUrl}}/members/1/
+Authorization: Bearer {{token}}
+
+### Create member
+POST {{baseUrl}}/members/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "full_name": "Jane Doe",
+  "email": "jane@example.com",
+  "phone": "+1 555-123-4567",
+  "title": "Frontend Developer",
+  "notes": "Contractor"
+}
+
+### Update member (partial)
+PATCH {{baseUrl}}/members/1/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "title": "Senior Frontend Developer"
+}
+
+### Delete member
+DELETE {{baseUrl}}/members/1/
+Authorization: Bearer {{token}}
+
+############################################################
+# PROJECTS
+############################################################
+
+### List my projects (owned by current Professional)
+GET {{baseUrl}}/projects/
+Authorization: Bearer {{token}}
+
+### Retrieve project by ID
+GET {{baseUrl}}/projects/12/
+Authorization: Bearer {{token}}
+
+### Create project
+# owner is set automatically from current user's Professional profile
+POST {{baseUrl}}/projects/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "name": "Alpha Project",
+  "description": "Internal build",
+  "team_member_ids": [1, 2, 3]
+}
+
+### Update project (partial)
+PATCH {{baseUrl}}/projects/12/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "description": "Updated description"
+}
+
+### Delete project
+DELETE {{baseUrl}}/projects/12/
+Authorization: Bearer {{token}}
+
+### List project members (shortcut)
+GET {{baseUrl}}/projects/12/members/
+Authorization: Bearer {{token}}
+
+### List project tasks (shortcut)
+GET {{baseUrl}}/projects/12/tasks/
+Authorization: Bearer {{token}}
+
+### Add member to project (action)
+POST {{baseUrl}}/projects/12/add-member/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "member_id": 5,
+  "role": "developer",
+  "is_active": true
+}
+
+### Remove member from project (action)
+POST {{baseUrl}}/projects/12/remove-member/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "member_id": 5
+}
+
+############################################################
+# PROJECT MEMBERS (direct CRUD + filtering)
+############################################################
+
+### List project members via query filter
+GET {{baseUrl}}/project-members/?project=12
+Authorization: Bearer {{token}}
+
+### Retrieve project member by ID
+GET {{baseUrl}}/project-members/55/
+Authorization: Bearer {{token}}
+
+### Update project member (role / active)
+PATCH {{baseUrl}}/project-members/55/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "role": "manager",
+  "is_active": true
+}
+
+### Delete project member
+DELETE {{baseUrl}}/project-members/55/
+Authorization: Bearer {{token}}
+
+############################################################
+# TASKS
+############################################################
+
+### List tasks (with filters)
+# Available filters: ?project=<id>&status=TODO|IN_PROGRESS|DONE&assignee=<project_member_id>&parent=<task_id>
+GET {{baseUrl}}/tasks/?project=12&status=IN_PROGRESS
+Authorization: Bearer {{token}}
+
+### Retrieve task by ID
+GET {{baseUrl}}/tasks/99/
+Authorization: Bearer {{token}}
+
+### Create task
+POST {{baseUrl}}/tasks/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "title": "Set up CI",
+  "description": "GitHub Actions for backend",
+  "project": 12,
+  "assignee_id": 55,
+  "created_by_id": 54,
+  "priority": "HIGH",
+  "due_date": "2025-10-20"
+}
+
+### Update task (partial)
+PATCH {{baseUrl}}/tasks/99/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "priority": "MEDIUM",
+  "description": "Adjust workflow cache"
+}
+
+### Delete task
+DELETE {{baseUrl}}/tasks/99/
+Authorization: Bearer {{token}}
+
+### Assign task (action)
+POST {{baseUrl}}/tasks/99/assign/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "project_member_id": 55
+}
+
+### Set task status (action)
+POST {{baseUrl}}/tasks/99/set-status/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "status": "DONE"
+}
+
+### List available members for a task (its project’s members)
+GET {{baseUrl}}/tasks/99/members/
+Authorization: Bearer {{token}}
+
+############################################################
+# TASK COMMENTS
+############################################################
+
+### List comments (filter by task)
+GET {{baseUrl}}/task-comments/?task=99
+Authorization: Bearer {{token}}
+
+### Retrieve comment by ID
+GET {{baseUrl}}/task-comments/7/
+Authorization: Bearer {{token}}
+
+### Create comment
+POST {{baseUrl}}/task-comments/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "task": 99,
+  "author_id": 54,
+  "content": "CI is now green ✅"
+}
+
+### Update comment
+PATCH {{baseUrl}}/task-comments/7/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "content": "CI is green and cache optimized."
+}
+
+### Delete comment
+DELETE {{baseUrl}}/task-comments/7/
+Authorization: Bearer {{token}}
+
+############################################################
+# TASK ATTACHMENTS
+############################################################
+
+### List attachments (filter by task)
+GET {{baseUrl}}/task-attachments/?task=99
+Authorization: Bearer {{token}}
+
+### Retrieve attachment by ID
+GET {{baseUrl}}/task-attachments/21/
+Authorization: Bearer {{token}}
+
+### Upload attachment (multipart/form-data)
+POST {{baseUrl}}/task-attachments/
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=BOUNDARY
+
+--BOUNDARY
+Content-Disposition: form-data; name="task"
+
+99
+--BOUNDARY
+Content-Disposition: form-data; name="uploaded_by_id"
+
+54
+--BOUNDARY
+Content-Disposition: form-data; name="filename"
+
+design.pdf
+--BOUNDARY
+Content-Disposition: form-data; name="file"; filename="design.pdf"
+Content-Type: application/pdf
+
+< ./files/design.pdf
+--BOUNDARY--
+
+### Update attachment metadata (filename)
+PATCH {{baseUrl}}/task-attachments/21/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "filename": "design_v2.pdf"
+}
+
+### Delete attachment
+DELETE {{baseUrl}}/task-attachments/21/
+Authorization: Bearer {{token}}

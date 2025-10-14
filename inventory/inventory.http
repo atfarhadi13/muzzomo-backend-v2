@@ -1,0 +1,228 @@
+@baseUrl = https://your-domain.com/api/inventory
+@token = < YOUR_JWT_ACCESS_TOKEN >
+@json = application/json
+
+### Ping (optional)
+GET {{baseUrl}}/
+Authorization: Bearer {{token}}
+
+############################################################
+# INVENTORY ITEMS (CRUD + Actions)
+############################################################
+
+### List items (filters: ?q=, ?type=consumable|reusable)
+GET {{baseUrl}}/items/?q=brush&type=reusable
+Authorization: Bearer {{token}}
+
+### Retrieve item
+GET {{baseUrl}}/items/1/
+Authorization: Bearer {{token}}
+
+### Create item (consumable)
+POST {{baseUrl}}/items/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "name": "Acrylic Paint - Red",
+  "item_type": "consumable",
+  "unit": "ml",
+  "reorder_point": 100
+}
+
+### Create item (reusable)
+POST {{baseUrl}}/items/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "name": "Large Paint Brush",
+  "item_type": "reusable",
+  "unit": "pcs",
+  "reorder_point": 0
+}
+
+### Update item (partial)
+PATCH {{baseUrl}}/items/1/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "reorder_point": 80,
+  "notes": "Popular color"
+}
+
+### Delete item
+DELETE {{baseUrl}}/items/1/
+Authorization: Bearer {{token}}
+
+### ACTION: Add stock to item
+POST {{baseUrl}}/items/2/add-stock/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "quantity": 200,
+  "note": "Initial load"
+}
+
+### ACTION: Consume from consumable item
+POST {{baseUrl}}/items/2/consume/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "quantity": 25,
+  "note": "Job #X color fill",
+  "task": 99
+}
+
+### ACTION: Checkout reusable item
+POST {{baseUrl}}/items/3/checkout/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "quantity": 2,
+  "note": "Sent with team to site",
+  "task": 100
+}
+
+### ACTION: Checkin reusable item
+POST {{baseUrl}}/items/3/checkin/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "quantity": 1,
+  "note": "Returned from site",
+  "task": 100
+}
+
+### ACTION: Adjust item total (positive or negative)
+POST {{baseUrl}}/items/2/adjust/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "quantity_delta": -5,
+  "note": "Wastage during mixing"
+}
+
+### ACTION: List item locations
+GET {{baseUrl}}/items/2/locations/
+Authorization: Bearer {{token}}
+
+### ACTION: List item logs
+GET {{baseUrl}}/items/2/logs/
+Authorization: Bearer {{token}}
+
+############################################################
+# LOCATION-SPECIFIC ACTIONS
+############################################################
+
+### ACTION: Add stock at a specific location
+POST {{baseUrl}}/items/2/add-stock-at/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "location_id": 7,
+  "quantity": 50,
+  "note": "Delivered to warehouse A"
+}
+
+### ACTION: Consume at a specific location
+POST {{baseUrl}}/items/2/consume-at/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "location_id": 7,
+  "quantity": 10,
+  "note": "Used at site via warehouse stock",
+  "task": 101
+}
+
+### ACTION: Checkout reusable at a specific location
+POST {{baseUrl}}/items/3/checkout-at/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "location_id": 8,
+  "quantity": 1,
+  "note": "Toolbox sent to Van 2",
+  "task": 102
+}
+
+### ACTION: Checkin reusable at a specific location
+POST {{baseUrl}}/items/3/checkin-at/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "location_id": 8,
+  "quantity": 1,
+  "note": "Toolbox returned from Van 2",
+  "task": 102
+}
+
+### ACTION: Transfer between two locations (same item)
+POST {{baseUrl}}/items/2/transfer/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "source_location_id": 7,
+  "dest_location_id": 8,
+  "quantity": 20,
+  "note": "Move to Van 1 for tomorrow"
+}
+
+############################################################
+# ITEM LOCATIONS (CRUD)
+############################################################
+
+### List locations (filters: ?item=, ?q=)
+GET {{baseUrl}}/item-locations/?item=2&q=warehouse
+Authorization: Bearer {{token}}
+
+### Retrieve location
+GET {{baseUrl}}/item-locations/7/
+Authorization: Bearer {{token}}
+
+### Create location for an item
+POST {{baseUrl}}/item-locations/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "item": 2,
+  "location_name": "Warehouse A"
+}
+
+### Update location name
+PATCH {{baseUrl}}/item-locations/7/
+Authorization: Bearer {{token}}
+Content-Type: {{json}}
+
+{
+  "location_name": "Warehouse A - Main"
+}
+
+### Delete location
+DELETE {{baseUrl}}/item-locations/7/
+Authorization: Bearer {{token}}
+
+############################################################
+# LOGS (READ-ONLY)
+############################################################
+
+### List logs (filters: ?item=, ?task=)
+GET {{baseUrl}}/logs/?item=2
+Authorization: Bearer {{token}}
+
+### Retrieve a single log
+GET {{baseUrl}}/logs/15/
+Authorization: Bearer {{token}}
