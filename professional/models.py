@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator, MinLengthValidator, MaxLengthValidator
 from django.db import models, transaction
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Count
 from django.db.models.functions import Lower
 from django.utils import timezone
 
@@ -52,6 +52,9 @@ class Professional(models.Model):
         default=VerificationStatus.PENDING
     )
 
+    rating_avg = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_count = models.PositiveIntegerField(default=0)
+
     class Meta:
         ordering = ['user__email']
         constraints = [
@@ -88,6 +91,14 @@ class Professional(models.Model):
                     user.is_provider = False
                     user.save(update_fields=['is_professional', 'is_provider'])
             return res
+        
+    def update_rating_cache(self):
+        agg = self.ratings.aggregate(avg=Avg("rating"), cnt=Count("id"))
+        avg = agg["avg"]
+        cnt = agg["cnt"] or 0
+        self.rating_avg = round(Decimal(avg), 2) if avg is not None else None
+        self.rating_count = cnt
+        self.save(update_fields=["rating_avg", "rating_count"])
 
     def delete(self, *args, **kwargs):
         storage = self.certification.storage if self.certification else None
@@ -262,8 +273,20 @@ class ProfessionalRating(models.Model):
 
     def clean(self):
         super().clean()
-        if not (1 <= self.rating <= 5):
+        if self.professional and self.user_id == self.professional.user_id:
+            raise ValidationError("You cannot rate yourself.")
+        if not (1 <= int(self.rating) <= 5):
             raise ValidationError("Rating must be between 1 and 5.")
+
+    def save(self, *args, **kwargs):
+        creating = self._state.adding
+        super().save(*args, **kwargs)
+        self.professional.update_rating_cache()
+
+    def delete(self, *args, **kwargs):
+        pro = self.professional
+        super().delete(*args, **kwargs)
+        pro.update_rating_cache()
 
 class ProfessionalPayout(models.Model):
     professional = models.OneToOneField(

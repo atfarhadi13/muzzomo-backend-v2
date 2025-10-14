@@ -15,35 +15,34 @@ import os
 from datetime import datetime
 
 phone_validator = RegexValidator(
-    regex=r'^\+?\d{7,15}$',
+    regex=r"^\+?\d{7,15}$",
     message='Enter a valid phone number (7-15 digits, optional leading "+").',
 )
 
 def validate_image_size(image):
     max_size = 5 * 1024 * 1024
     if image.size > max_size:
-        raise ValidationError(f"Profile image cannot be larger than 5MB. Current size: {image.size / (1024 * 1024):.2f} MB.")
-    
+        from django.core.exceptions import ValidationError
+        raise ValidationError(
+            f"Profile image cannot be larger than 5MB. Current size: {image.size / (1024 * 1024):.2f} MB."
+        )
+
 def validate_image_format(image):
-    valid_formats = ['image/png', 'image/jpeg', 'image/webp']
-    if image.content_type not in valid_formats:
+    valid_formats = ["image/png", "image/jpeg", "image/webp"]
+    if getattr(image, "content_type", None) not in valid_formats:
+        from django.core.exceptions import ValidationError
         raise ValidationError("Profile image must be PNG, JPG, JPEG, or WEBP.")
 
 def profile_image_upload_to(instance, filename):
-    current_date = datetime.now()
-    year_folder = current_date.year
-    month_folder = current_date.strftime('%B')
-    day_folder = current_date.day
-    base_filename = f"{instance.first_name}_{instance.last_name}_{current_date.strftime('%Y%m%d_%H%M%S')}"
-    file_extension = filename.split('.')[-1]
-    final_filename = f"{base_filename}.{file_extension}"
-    file_path = os.path.join(str(year_folder), str(month_folder), str(day_folder), final_filename)
-    return file_path
+    now = datetime.now()
+    base_filename = f"{(instance.first_name or 'user')}_{(instance.last_name or 'img')}_{now.strftime('%Y%m%d_%H%M%S')}"
+    ext = filename.split(".")[-1]
+    return os.path.join(str(now.year), now.strftime("%B"), str(now.day), f"{base_filename}.{ext}")
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
-            raise ValueError('Email is required.')
+            raise ValueError("Email is required.")
         email = self.normalize_email(email).lower()
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -51,23 +50,28 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('is_active', True)
-        if not extra_fields.get('is_staff'):
-            raise ValueError('Superuser must have is_staff=True.')
-        if not extra_fields.get('is_superuser'):
-            raise ValueError('Superuser must have is_superuser=True.')
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("is_active", True)
+        if not extra_fields.get("is_staff"):
+            raise ValueError("Superuser must have is_staff=True.")
+        if not extra_fields.get("is_superuser"):
+            raise ValueError("Superuser must have is_superuser=True.")
         return self.create_user(email, password, **extra_fields)
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
     last_name = models.CharField(max_length=30, blank=True, validators=[MinLengthValidator(2)])
     phone_number = models.CharField(max_length=20, blank=True, null=True, validators=[phone_validator])
-    profile_image = models.ImageField(upload_to=profile_image_upload_to, null=True, blank=True, 
-                    validators=[validate_image_size, validate_image_format], default='path_to_default_image')
-    
+    profile_image = models.ImageField(
+        upload_to=profile_image_upload_to,
+        null=True,
+        blank=True,
+        validators=[validate_image_size, validate_image_format],
+        default="path_to_default_image",
+    )
+
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
 
     is_provider = models.BooleanField(default=False)
@@ -83,36 +87,26 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     locked_until = models.DateTimeField(null=True, blank=True)
     last_login_failure = models.DateTimeField(null=True, blank=True)
 
-    USERNAME_FIELD = 'email'
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
 
     class Meta:
-        ordering = ['email']
-        constraints = [models.UniqueConstraint(Lower('email'), name='uniq_user_email_ci')]
-        indexes = [
-            models.Index(fields=['is_active', 'is_verified']),
-            models.Index(Lower('email'), name='idx_user_email_ci'),
-        ]
+        ordering = ["email"]
 
     def save(self, *args, **kwargs):
         if self.email:
             self.email = self.email.lower()
         super().save(*args, **kwargs)
 
-    def clean(self):
-        super().clean()
-        if self.email:
-            self.email = self.email.lower()
-
     def __str__(self):
         return self.email
-    
+
     @property
     def is_locked(self) -> bool:
         return bool(self.locked_until and timezone.now() < self.locked_until)
-    
+
     @property
     def full_name(self):
         return f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip() or None
