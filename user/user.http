@@ -1,11 +1,11 @@
-@base = http://127.0.0.1:8000
-@token = <PUT_ACCESS_TOKEN_HERE>
-@refresh = <PUT_REFRESH_TOKEN_HERE>
-@email = newuser@example.com
-@password = Str0ngPass!
-@new_password = EvenStrongerPass1!
-@new_email = new.address@example.com
-@otp = 123456
+@base = http://127.0.0.1:8000/user
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYzMjc1MjcwLCJpYXQiOjE3NjA2ODMyNzAsImp0aSI6IjkzZGU2N2M2NDEzODRmNTZiODM1MjQ3NWM3ZjI2Y2VhIiwidXNlcl9pZCI6MzZ9.Lb5HAq7XjWW1Cm6TI9p8DPARzekgZjTI7_n-rXvBHmo
+@refresh = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc2MzI3NTI3MCwiaWF0IjoxNzYwNjgzMjcwLCJqdGkiOiI2MjUzYzgxYjFlMjY0OGZmYjkyMjQ5MTAxN2ZmYTdjZCIsInVzZXJfaWQiOjM2fQ.isLr-W85MOcN1fT-UCEoss80U0M6_UOK9GfnKjOoADQ
+@email = muzzomoteam@gmail.com
+@password = subhan@Ali123
+@new_password = cout@Ali123
+@new_email = muzzomohelp@gmail.com
+@otp = 481501
 @revoke_jti = <PUT_JWT_JTI_TO_REVOKE>
 
 ###
@@ -129,10 +129,11 @@ Content-Type: application/json
 ###
 # Email Update — Resend OTP
 POST {{base}}/auth/email-update/resend-otp/
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "email": "{{email}}"
+  "email": "{{new_email}}"
 }
 
 ###
@@ -171,6 +172,21 @@ Authorization: Bearer {{token}}
 POST {{base}}/account/deactivate/
 Authorization: Bearer {{token}}
 
+POST {{base}}account/reactivate/request/
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+POST {{base}}/account/reactivate/confirm/
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "{{otp}}"
+}
+
 ###
 # Sessions — List outstanding refresh tokens
 GET {{base}}/sessions/
@@ -186,21 +202,19 @@ Content-Type: application/json
   "jti": "{{revoke_jti}}"
 }
 
-###
-# OPTIONAL: Account Unlock — Request code (if implemented)
-# POST {{base}}/auth/unlock/request/
-# Content-Type: application/json
-#
-# {
-#   "email": "{{email}}"
-# }
 
-###
-# OPTIONAL: Account Unlock — Confirm code (if implemented)
-# POST {{base}}/auth/unlock/confirm/
-# Content-Type: application/json
-#
-# {
-#   "email": "{{email}}",
-#   "code": "{{otp}}"
-# }
+POST {{base}}/auth/unlock/request/
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+
+POST {{base}}/auth/unlock/confirm/
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "{{otp}}"
+}

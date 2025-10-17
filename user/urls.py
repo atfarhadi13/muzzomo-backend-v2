@@ -11,7 +11,7 @@ from user.views import (
 
     ProfileImageUpdateView, ProfileBasicUpdateView, MeView,
 
-    DeactivateAccountView,
+    DeactivateAccountView, ReactivateAccountConfirmView, ReactivateAccountRequestView,
 
     SessionsView, RevokeSessionView,
 
@@ -41,6 +41,8 @@ urlpatterns = [
     path("me/", MeView.as_view(), name="me"),
 
     path("account/deactivate/", DeactivateAccountView.as_view(), name="account-deactivate"),
+    path("account/reactivate/request/", ReactivateAccountRequestView.as_view(), name="account-reactivate-request"),
+    path("account/reactivate/confirm/", ReactivateAccountConfirmView.as_view(), name="account-reactivate-confirm"),
 
     path("sessions/", SessionsView.as_view(), name="sessions-list"),
     path("sessions/revoke/", RevokeSessionView.as_view(), name="sessions-revoke"),

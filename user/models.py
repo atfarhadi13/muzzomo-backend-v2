@@ -87,6 +87,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     locked_until = models.DateTimeField(null=True, blank=True)
     last_login_failure = models.DateTimeField(null=True, blank=True)
 
+    token_valid_after = models.DateTimeField(default=timezone.now)
+    last_password_changed_at = models.DateTimeField(default=timezone.now)
+
+    last_email_changed_at = models.DateTimeField(default=timezone.now)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
@@ -135,12 +140,14 @@ class OneTimeCode(models.Model):
     PURPOSE_RESET = 'password_reset'
     PURPOSE_EMAIL = 'email_update'
     PURPOSE_UNLOCK = 'account_unlock'
+    PURPOSE_REACTIVATE = 'account_reactivate'
 
     PURPOSE_CHOICES = [
         (PURPOSE_LOGIN, 'Login OTP'),
         (PURPOSE_RESET, 'Password Reset'),
         (PURPOSE_EMAIL, 'Email Update'),
         (PURPOSE_UNLOCK, 'Account Unlock'),
+        (PURPOSE_REACTIVATE, 'Account Reactivation'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='one_time_codes')
@@ -186,6 +193,8 @@ class OneTimeCode(models.Model):
             return timedelta(minutes=30)
         if purpose == cls.PURPOSE_UNLOCK:
             return timedelta(minutes=10)
+        if purpose == cls.PURPOSE_REACTIVATE:
+            return timedelta(minutes=15)
         return timedelta(minutes=10)
 
     @classmethod

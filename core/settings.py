@@ -1,4 +1,14 @@
 import os
+
+
+try:
+    import certifi
+    if not os.environ.get("SSL_CERT_FILE"):
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", os.environ["SSL_CERT_FILE"])
+except Exception:
+    pass
+
 from pathlib import Path
 from datetime import timedelta
 import environ
@@ -18,14 +28,27 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
-    "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
-    "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
+    "django.contrib.admin", 
+    "django.contrib.auth", 
+    "django.contrib.contenttypes",
+    "django.contrib.sessions", 
+    "django.contrib.messages", 
+    "django.contrib.staticfiles",
     "corsheaders",
 
+    # Thirdpary apps
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     
-    "address", "job", "professional", "service", "user", "subscription", "project_management", "inventory", "project_settings"
+    "address", 
+    "job", 
+    "professional", 
+    "service", 
+    "user", 
+    "subscription", 
+    "project_management", 
+    "inventory", 
+    "project_settings"
 ]
 
 MIDDLEWARE = [
@@ -75,7 +98,7 @@ REST_FRAMEWORK = {
 
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
-    "EXCEPTION_HANDLER": "user.exceptions.custom_exception_handler",
+    #"EXCEPTION_HANDLER": "user.exceptions.custom_exception_handler",
 }
 
 SIMPLE_JWT = {
@@ -121,6 +144,8 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_TIMEOUT = 20
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

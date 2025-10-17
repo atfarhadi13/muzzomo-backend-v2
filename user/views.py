@@ -1,3 +1,6 @@
+from django.core.exceptions import FieldError
+from django.utils.dateparse import parse_datetime
+
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -21,6 +24,9 @@ from .serializers import (
     EmailUpdateConfirmSerializer,
     ProfileImageUpdateSerializer,
     ProfileBasicUpdateSerializer,
+    ResendOTPSerializer,
+    ReactivateAccountRequestSerializer,
+    ReactivateAccountConfirmSerializer,
 )
 
 from .services.otp_utils import issue_otp, can_resend
@@ -36,10 +42,23 @@ class RegisterView(APIView):
         email = (request.data.get("email") or "").lower().strip()
         if email:
             existing = CustomUser.objects.filter(email__iexact=email).first()
-            if existing and not existing.is_verified:
+            if existing:
+                if existing.is_verified:
+                    return Response(
+                        {
+                            "detail": "This email is already registered and verified. Please log in.",
+                            "email": existing.email,
+                            "next_action": "login"
+                        },
+                        status=status.HTTP_200_OK,
+                    )
                 if not can_resend(existing.id, OneTimeCode.PURPOSE_LOGIN, limit=1, window=60):
                     return Response(
-                        {"detail": "Please wait before requesting another verification code."},
+                        {
+                            "detail": "Please wait before requesting another verification code.",
+                            "reason": "rate_limited",
+                            "next_action": "wait_and_retry"
+                        },
                         status=status.HTTP_429_TOO_MANY_REQUESTS,
                     )
                 obj, code, ttl_min = issue_otp(user=existing, purpose=OneTimeCode.PURPOSE_LOGIN)
@@ -49,7 +68,7 @@ class RegisterView(APIView):
                     pass
                 return Response(
                     {
-                        "detail": "If an account exists, a verification code has been sent.",
+                        "detail": "Account exists but is not verified. A new verification code has been sent.",
                         "requires_verification": True,
                         "next_action": "verify_email",
                         "email": existing.email,
@@ -57,6 +76,7 @@ class RegisterView(APIView):
                     },
                     status=status.HTTP_200_OK,
                 )
+
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -65,12 +85,16 @@ class RegisterView(APIView):
             send_otp_email(to_email=user.email, code=code, ttl_minutes=ttl_min, purpose="verify")
         except Exception as e:
             return Response(
-                {"detail": "User created, but failed to send OTP email.", "error": str(e)},
+                {
+                    "detail": "User created, but failed to send verification code.",
+                    "error": str(e),
+                    "next_action": "resend_code"
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         return Response(
             {
-                "detail": "Registration successful. OTP sent.",
+                "detail": "Registration successful. Verification code sent.",
                 "requires_verification": True,
                 "next_action": "verify_email",
                 "email": user.email,
@@ -88,12 +112,14 @@ class VerifyEmailView(APIView):
         serializer = VerifyEmailOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        already = serializer.validated_data.get("already_verified", False)
         return Response(
             {
-                "detail": "Email verified successfully.",
+                "detail": "Account is already verified. You can login." if already else "Email verified successfully.",
                 "email": user.email,
-                "is_verified": user.is_verified,
+                "is_verified": True,
                 "is_provider": user.is_provider,
+                "next_action": "login",
             },
             status=status.HTTP_200_OK,
         )
@@ -104,11 +130,10 @@ class ResendOTPView(APIView):
     throttle_scope = "otp"
 
     def post(self, request):
-        from .serializers import ResendOTPSerializer
         s = ResendOTPSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        s.save()
-        return Response({"detail": "If an account exists, a new code was sent."})
+        result = s.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class PasswordResetRequestView(APIView):
@@ -118,8 +143,8 @@ class PasswordResetRequestView(APIView):
     def post(self, request):
         s = PasswordResetRequestSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        s.save()
-        return Response({"detail": "If an account exists, a reset code was sent."}, status=status.HTTP_200_OK)
+        result = s.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class PasswordResetConfirmView(APIView):
@@ -128,8 +153,15 @@ class PasswordResetConfirmView(APIView):
     def post(self, request):
         s = PasswordResetConfirmSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        s.save()
-        return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+        user = s.save()
+        return Response(
+            {
+                "detail": "Password has been reset successfully.",
+                "email": user.email,
+                "next_action": "login",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PasswordResetResendOTPView(APIView):
@@ -139,8 +171,8 @@ class PasswordResetResendOTPView(APIView):
     def post(self, request):
         serializer = PasswordResetResendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"detail": "A new password reset OTP code has been sent to your email."}, status=status.HTTP_200_OK)
+        result = serializer.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class LoginView(TokenObtainPairView):
@@ -175,8 +207,8 @@ class EmailUpdateRequestView(APIView):
     def post(self, request):
         s = EmailUpdateRequestSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
-        s.save()
-        return Response({"detail": "Verification code sent to new email."}, status=status.HTTP_200_OK)
+        result = s.save()
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class EmailUpdateConfirmView(APIView):
@@ -186,7 +218,14 @@ class EmailUpdateConfirmView(APIView):
         s = EmailUpdateConfirmSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
         user = s.save()
-        return Response({"detail": "Email updated successfully.", "email": user.email}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "detail": "Email updated successfully.",
+                "email": user.email,
+                "next_action": "relogin",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class EmailUpdateResendOTPView(APIView):
@@ -306,34 +345,108 @@ class DeactivateAccountView(APIView):
         blacklist_user_tokens(user)
         return Response({"detail": "Account deactivated."})
 
-
 class SessionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        tokens = OutstandingToken.objects.filter(user=request.user).order_by("-created")
-        return Response(
-            [
-                {
+        try:
+            qs = OutstandingToken.objects.filter(user=request.user)
+
+            include_blacklisted = request.query_params.get("include_blacklisted", "true").lower() == "true"
+            if not include_blacklisted:
+                qs = qs.exclude(blacklistedtoken__isnull=False)
+
+            created_after = request.query_params.get("created_after")
+            created_before = request.query_params.get("created_before")
+            if created_after:
+                dt = parse_datetime(created_after)
+                if not dt:
+                    return Response({"detail": "Invalid 'created_after' datetime."}, status=400)
+                qs = qs.filter(created_at__gte=dt)
+            if created_before:
+                dt = parse_datetime(created_before)
+                if not dt:
+                    return Response({"detail": "Invalid 'created_before' datetime."}, status=400)
+                qs = qs.filter(created_at__lte=dt)
+
+            try:
+                qs = qs.order_by("-created_at")
+            except FieldError:
+                return Response({"detail": "Ordering field invalid."}, status=400)
+            
+            page = max(1, int(request.query_params.get("page", 1)))
+            size = max(1, min(100, int(request.query_params.get("size", 50))))
+            start = (page - 1) * size
+            end = start + size
+            total = qs.count()
+            items = qs[start:end]
+
+            data = []
+            blacklisted_map = set(BlacklistedToken.objects.filter(token__in=items).values_list("token_id", flat=True))
+            for t in items:
+                data.append({
                     "id": t.jti,
-                    "created_at": t.created,
+                    "created_at": t.created_at,
                     "expires_at": t.expires_at,
-                    "blacklisted": BlacklistedToken.objects.filter(token=t).exists(),
-                }
-                for t in tokens
-            ]
-        )
+                    "blacklisted": t.id in blacklisted_map,
+                })
+
+            return Response({
+                "results": data,
+                "page": page,
+                "size": size,
+                "total": total,
+                "has_next": end < total,
+            }, status=200)
+
+        except Exception as e:
+            return Response({"detail": "Failed to fetch sessions.", "error": str(e)}, status=500)
 
 
 class RevokeSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        jti = request.data.get("jti")
+        jti = (request.data.get("jti") or "").strip()
         if not jti:
             return Response({"detail": "jti required."}, status=400)
-        t = OutstandingToken.objects.filter(user=request.user, jti=jti).first()
-        if not t:
-            return Response({"detail": "Not found."}, status=404)
-        BlacklistedToken.objects.get_or_create(token=t)
-        return Response({"detail": "Session revoked."})
+
+        try:
+            t = OutstandingToken.objects.filter(user=request.user, jti=jti).first()
+            if not t:
+                return Response({"detail": "Session not found."}, status=404)
+
+            bl, created = BlacklistedToken.objects.get_or_create(token=t)
+            return Response(
+                {"detail": "Session revoked." if created else "Session already revoked.", "jti": jti},
+                status=200
+            )
+        except Exception as e:
+            return Response({"detail": "Failed to revoke session.", "error": str(e)}, status=500)
+        
+class ReactivateAccountRequestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "otp"
+
+    def post(self, request):
+        s = ReactivateAccountRequestSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        result = s.save()
+        return Response(result, status=status.HTTP_200_OK)
+    
+class ReactivateAccountConfirmView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = "otp"
+
+    def post(self, request):
+        s = ReactivateAccountConfirmSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        user = s.save()
+        return Response(
+            {
+                "detail": "Account reactivated." if not s.validated_data.get("already_active") else "Account is already active.",
+                "email": user.email,
+                "next_action": "login",
+            },
+            status=status.HTTP_200_OK,
+        )
